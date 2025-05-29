@@ -1,0 +1,18 @@
+{
+    "mcpServers" : {
+        "notecard": {
+            "command": "notecard/notecard",
+            "args": [
+                "--config",
+                "config.json"
+            ]
+        },
+        "notehub": {
+            "command": "notehub/notehub",
+            "args": [
+                "--env",
+                ".env"
+            ]
+        }
+    }
+}
