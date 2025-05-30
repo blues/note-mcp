@@ -149,7 +149,7 @@ func isSignificantCommandEvent(line string) bool {
 		"firmware", "version", "update", "download",
 		"transfer", "chunk", "bytes", "binary",
 		"waiting", "restarting", "ready",
-		"notecard", "response", "request",
+		"notecard", "response", "request", "side-loading",
 	}
 
 	for _, keyword := range significantKeywords {
