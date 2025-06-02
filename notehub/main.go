@@ -50,12 +50,22 @@ func main() {
 	deviceListTool := CreateDeviceListTool()
 	projectEventsTool := CreateProjectEventsTool()
 	sendNoteTool := CreateSendNoteTool()
+	routeListTool := CreateRouteListTool()
+	routeDetailTool := CreateRouteDetailTool()
+	deviceHealthLogTool := CreateDeviceHealthLogTool()
+	monitorListTool := CreateMonitorListTool()
+	monitorDetailTool := CreateMonitorDetailTool()
 
 	// Add tool handlers
 	s.AddTool(projectListTool, HandleProjectListTool)
 	s.AddTool(deviceListTool, HandleDeviceListTool)
 	s.AddTool(projectEventsTool, HandleProjectEventsTool)
 	s.AddTool(sendNoteTool, HandleSendNoteTool)
+	s.AddTool(routeListTool, HandleRouteListTool)
+	s.AddTool(routeDetailTool, HandleRouteDetailTool)
+	s.AddTool(deviceHealthLogTool, HandleDeviceHealthLogTool)
+	s.AddTool(monitorListTool, HandleMonitorListTool)
+	s.AddTool(monitorDetailTool, HandleMonitorDetailTool)
 
 	if err := server.ServeStdio(s); err != nil {
 		fmt.Printf("Server error: %v\n", err)

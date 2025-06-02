@@ -3,3 +3,4 @@ notecard
 notehub
 !notehub/
 .env
+dist

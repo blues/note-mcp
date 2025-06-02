@@ -1,0 +1,40 @@
+name: Release Notecard and Notehub MCP servers
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  goreleaser:
+    runs-on: macos-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      -
+        name: Fetch all tags
+        run: git fetch --force --tags
+      -
+        name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.18
+      -
+        name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release -f .goreleaser.yaml --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+      -
+        name: Upload assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: note-mcp
+          path: dist/*

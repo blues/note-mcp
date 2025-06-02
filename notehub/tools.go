@@ -284,3 +284,198 @@ func HandleSendNoteTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	return mcp.NewToolResultText(response), nil
 }
+
+// CreateRouteListTool creates a tool for listing routes in a Notehub project
+func CreateRouteListTool() mcp.Tool {
+	return mcp.NewTool("route_list",
+		mcp.WithDescription("List all routes in a specific Notehub project"),
+		mcp.WithString("project_uid",
+			mcp.Required(),
+			mcp.Description("The UID of the project to list routes for"),
+		),
+	)
+}
+
+// HandleRouteListTool handles listing routes in a Notehub project
+func HandleRouteListTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if sessionToken == "" {
+		return mcp.NewToolResultError("No session token available. Please refresh token first."), nil
+	}
+
+	// Extract project_uid from arguments
+	projectUID, err := request.RequireString("project_uid")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid project_uid parameter: %v", err)), nil
+	}
+
+	// Make the API request to list routes for the project
+	endpoint := fmt.Sprintf("/v1/projects/%s/routes", projectUID)
+	response, err := makeNotehubAPIRequest("GET", endpoint, nil)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to list routes: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(response), nil
+}
+
+// CreateRouteDetailTool creates a tool for getting detailed information about a specific route
+func CreateRouteDetailTool() mcp.Tool {
+	return mcp.NewTool("route_detail",
+		mcp.WithDescription("Get detailed information about a specific route in a Notehub project"),
+		mcp.WithString("project_uid",
+			mcp.Required(),
+			mcp.Description("The UID of the project containing the route"),
+		),
+		mcp.WithString("route_uid",
+			mcp.Required(),
+			mcp.Description("The UID of the route to get details for"),
+		),
+	)
+}
+
+// HandleRouteDetailTool handles getting detailed information about a specific route
+func HandleRouteDetailTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if sessionToken == "" {
+		return mcp.NewToolResultError("No session token available. Please refresh token first."), nil
+	}
+
+	// Extract project_uid from arguments
+	projectUID, err := request.RequireString("project_uid")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid project_uid parameter: %v", err)), nil
+	}
+
+	// Extract route_uid from arguments
+	routeUID, err := request.RequireString("route_uid")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid route_uid parameter: %v", err)), nil
+	}
+
+	// Make the API request to get detailed route information
+	endpoint := fmt.Sprintf("/v1/projects/%s/routes/%s", projectUID, routeUID)
+	response, err := makeNotehubAPIRequest("GET", endpoint, nil)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get route details: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(response), nil
+}
+
+// CreateDeviceHealthLogTool creates a tool for getting device health log information
+func CreateDeviceHealthLogTool() mcp.Tool {
+	return mcp.NewTool("device_health_log",
+		mcp.WithDescription("Get device health log information for a specific device in a Notehub project"),
+		mcp.WithString("project_uid",
+			mcp.Required(),
+			mcp.Description("The UID of the project containing the device"),
+		),
+		mcp.WithString("device_uid",
+			mcp.Required(),
+			mcp.Description("The UID of the device to get health log for"),
+		),
+	)
+}
+
+// HandleDeviceHealthLogTool handles getting device health log information
+func HandleDeviceHealthLogTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if sessionToken == "" {
+		return mcp.NewToolResultError("No session token available. Please refresh token first."), nil
+	}
+
+	// Extract project_uid from arguments
+	projectUID, err := request.RequireString("project_uid")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid project_uid parameter: %v", err)), nil
+	}
+
+	// Extract device_uid from arguments
+	deviceUID, err := request.RequireString("device_uid")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid device_uid parameter: %v", err)), nil
+	}
+
+	// Make the API request to get device health log information
+	endpoint := fmt.Sprintf("/v1/projects/%s/devices/%s/health-log", projectUID, deviceUID)
+	response, err := makeNotehubAPIRequest("GET", endpoint, nil)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get device health log: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(response), nil
+}
+
+// CreateMonitorListTool creates a tool for listing monitors in a Notehub project
+func CreateMonitorListTool() mcp.Tool {
+	return mcp.NewTool("monitor_list",
+		mcp.WithDescription("List all monitors in a specific Notehub project"),
+		mcp.WithString("project_uid",
+			mcp.Required(),
+			mcp.Description("The UID of the project to list monitors for"),
+		),
+	)
+}
+
+// HandleMonitorListTool handles listing monitors in a Notehub project
+func HandleMonitorListTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if sessionToken == "" {
+		return mcp.NewToolResultError("No session token available. Please refresh token first."), nil
+	}
+
+	// Extract project_uid from arguments
+	projectUID, err := request.RequireString("project_uid")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid project_uid parameter: %v", err)), nil
+	}
+
+	// Make the API request to list monitors for the project
+	endpoint := fmt.Sprintf("/v1/projects/%s/monitors", projectUID)
+	response, err := makeNotehubAPIRequest("GET", endpoint, nil)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to list monitors: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(response), nil
+}
+
+// CreateMonitorDetailTool creates a tool for getting detailed information about a specific monitor
+func CreateMonitorDetailTool() mcp.Tool {
+	return mcp.NewTool("monitor_detail",
+		mcp.WithDescription("Get detailed information about a specific monitor in a Notehub project"),
+		mcp.WithString("project_uid",
+			mcp.Required(),
+			mcp.Description("The UID of the project containing the monitor"),
+		),
+		mcp.WithString("monitor_uid",
+			mcp.Required(),
+			mcp.Description("The UID of the monitor to get details for"),
+		),
+	)
+}
+
+// HandleMonitorDetailTool handles getting detailed information about a specific monitor
+func HandleMonitorDetailTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if sessionToken == "" {
+		return mcp.NewToolResultError("No session token available. Please refresh token first."), nil
+	}
+
+	// Extract project_uid from arguments
+	projectUID, err := request.RequireString("project_uid")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid project_uid parameter: %v", err)), nil
+	}
+
+	// Extract monitor_uid from arguments
+	monitorUID, err := request.RequireString("monitor_uid")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid monitor_uid parameter: %v", err)), nil
+	}
+
+	// Make the API request to get detailed monitor information
+	endpoint := fmt.Sprintf("/v1/projects/%s/monitors/%s", projectUID, monitorUID)
+	response, err := makeNotehubAPIRequest("GET", endpoint, nil)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get monitor details: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(response), nil
+}

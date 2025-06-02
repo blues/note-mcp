@@ -1,0 +1,95 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  -
+    id: "notecard-mcp-linux"
+    dir: notecard
+    binary: notecard-mcp
+
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm
+      - arm64
+
+  -
+    id: "notehub-mcp-linux"
+    dir: notehub
+    binary: notehub-mcp
+
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm
+      - arm64
+  -
+    id: "notecard-mcp"
+    dir: notecard
+    binary: notecard-mcp
+
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm
+        goarm: 6
+      - goos: windows
+        goarch: arm64
+
+  -
+    id: "notehub-mcp"
+    dir: notehub
+    binary: notehub-mcp
+
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm
+        goarm: 6
+      - goos: windows
+        goarch: arm64
+
+checksum:
+  name_template: 'checksums.txt'
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+brews:
+  - repository:
+      owner: blues
+      name: homebrew-note-mcp
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: https://blues.com
+    description: Note MCP servers
+    license: MIT
+    dependencies:
+      - name: note-cli
