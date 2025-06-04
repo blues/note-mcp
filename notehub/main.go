@@ -47,25 +47,31 @@ func main() {
 
 	// Create and register Notehub tools
 	projectListTool := CreateProjectListTool()
+	projectCreateTool := CreateProjectCreateTool()
 	deviceListTool := CreateDeviceListTool()
 	projectEventsTool := CreateProjectEventsTool()
 	sendNoteTool := CreateSendNoteTool()
+	sendEncryptedNoteTool := CreateSendEncryptedNoteTool()
 	routeListTool := CreateRouteListTool()
 	routeDetailTool := CreateRouteDetailTool()
 	deviceHealthLogTool := CreateDeviceHealthLogTool()
 	monitorListTool := CreateMonitorListTool()
 	monitorDetailTool := CreateMonitorDetailTool()
+	devicePublicKeyTool := CreateDevicePublicKeyTool()
 
 	// Add tool handlers
 	s.AddTool(projectListTool, HandleProjectListTool)
+	s.AddTool(projectCreateTool, HandleProjectCreateTool)
 	s.AddTool(deviceListTool, HandleDeviceListTool)
 	s.AddTool(projectEventsTool, HandleProjectEventsTool)
 	s.AddTool(sendNoteTool, HandleSendNoteTool)
+	s.AddTool(sendEncryptedNoteTool, HandleSendEncryptedNoteTool)
 	s.AddTool(routeListTool, HandleRouteListTool)
 	s.AddTool(routeDetailTool, HandleRouteDetailTool)
 	s.AddTool(deviceHealthLogTool, HandleDeviceHealthLogTool)
 	s.AddTool(monitorListTool, HandleMonitorListTool)
 	s.AddTool(monitorDetailTool, HandleMonitorDetailTool)
+	s.AddTool(devicePublicKeyTool, HandleDevicePublicKeyTool)
 
 	if err := server.ServeStdio(s); err != nil {
 		fmt.Printf("Server error: %v\n", err)

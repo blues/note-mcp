@@ -17,6 +17,17 @@ func ExecuteNotecardCommand(args []string) (string, error) {
 	return string(output), nil
 }
 
+// ExecuteNotecardCommandWithEnv executes a notecard command with custom environment variables
+func ExecuteNotecardCommandWithEnv(args []string, env []string) (string, error) {
+	cmd := exec.Command("notecard", args...)
+	cmd.Env = env
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to execute command: %v\nOutput: %s", err, string(output))
+	}
+	return string(output), nil
+}
+
 // ExecuteNotecardCommandWithLogger executes a notecard command with logging support
 // Provides enhanced logging and real-time output capture for any notecard command
 func ExecuteNotecardCommandWithLogger(args []string, logger *MCPLogger) (string, error) {

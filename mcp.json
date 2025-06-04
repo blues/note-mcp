@@ -3,8 +3,8 @@
         "notecard": {
             "command": "notecard/notecard",
             "args": [
-                "--config",
-                "config.json"
+                "--env",
+                ".env"
             ]
         },
         "notehub": {

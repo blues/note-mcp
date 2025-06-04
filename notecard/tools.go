@@ -253,7 +253,7 @@ func CreateNotecardInitializeTool() mcp.Tool {
 
 func CreateNotecardRequestTool() mcp.Tool {
 	return mcp.NewTool("request",
-		mcp.WithDescription("Send a request to the Notecard and return the response. The notecard must be initialized first and you should verify that the request is valid before sending it (e.g. by using the 'docs://api/overview' resource). The request type is the JSON string of the request to send to the Notecard, e.g. '{\"req\":\"card.version\"}' or '{\"req\":\"card.temp\",\"minutes\":60}'. All requests are documented in the Notecard API documentation, which is provided by the MCP as a resource."),
+		mcp.WithDescription("Send a request to the Notecard and return the response. The notecard must be initialized first and you should verify that the request is valid before sending it (e.g. by using the 'docs://api/overview' resource). The request type is the JSON string of the request to send to the Notecard, e.g. '{\"req\":\"card.version\"}' or '{\"req\":\"card.temp\",\"minutes\":60}'. If a request is unknown, you can use the 'validate-request' tool to validate it. If the request is valid, you can use this tool to send it to the Notecard."),
 		mcp.WithString("request",
 			mcp.Required(),
 			mcp.Description("The request type to send to the Notecard (e.g., '{\"req\":\"card.version\"}', '{\"req\":\"card.status\"}', '{\"req\":\"hub.status\"}', '{\"req\":\"card.temp\",\"minutes\":60}', '{\"req\":\"card.voltage\"}')"),
@@ -509,5 +509,53 @@ func HandleNotecardUpdateFirmwareTool(logger *utils.MCPLogger) func(ctx context.
 		}
 
 		return mcp.NewToolResultText(fmt.Sprintf("Successfully updated Notecard firmware to version %s. The Notecard has restarted and connection has been reestablished.", version)), nil
+	}
+}
+
+func CreateNotecardValidateRequestTool() mcp.Tool {
+	return mcp.NewTool("validate-request",
+		mcp.WithDescription("Validate a Notecard API request against the Notecard API Schema. This helps ensure your request is valid before sending it to the Notecard. To use this tool, you must have the environment variable BLUES exported, otherwise it will just check for JSON validity."),
+		mcp.WithString("request",
+			mcp.Required(),
+			mcp.Description("The JSON string of the request to validate (e.g., '{\"req\":\"card.version\"}', '{\"req\":\"card.temp\",\"minutes\":60}')"),
+		),
+		mcp.WithString("schema_url",
+			mcp.Description("The schema URL to validate against. If not provided, uses the default Notecard API schema."),
+		),
+	)
+}
+
+func HandleNotecardValidateRequestTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	reqString, err := request.RequireString("request")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid request parameter: %v", err)), nil
+	}
+
+	schemaURL := request.GetString("schema_url", "")
+	// set the NOTE_JSON_SCHEMA_URL environment variable if a schema URL is provided, otherwise unset it
+	if schemaURL != "" {
+		os.Setenv("NOTE_JSON_SCHEMA_URL", schemaURL)
+	} else {
+		os.Unsetenv("NOTE_JSON_SCHEMA_URL")
+	}
+
+	output, err := utils.ExecuteNotecardCommandWithEnv([]string{"-req", reqString, "-dry", "-verbose"}, os.Environ())
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Attempt to validate request failed: %v", err)), nil
+	}
+
+	// strip the newline from the output
+	output = strings.ReplaceAll(output, "\n", "")
+
+	// If the output is not equal to the request, return the reason why it failed
+	if output != reqString {
+		return mcp.NewToolResultText(fmt.Sprintf("Validation for %s failed: %s", reqString, output)), nil
+	}
+
+	// if the BLUES environment variable is not set, return a warning
+	if os.Getenv("BLUES") == "" {
+		return mcp.NewToolResultText(fmt.Sprintf("✓ Request validation successful: The request '%s' is valid JSON.", reqString)), nil
+	} else {
+		return mcp.NewToolResultText(fmt.Sprintf("✓ Request validation successful: The request '%s' is valid according to the Notecard API schema.", reqString)), nil
 	}
 }
