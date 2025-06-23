@@ -19,24 +19,24 @@ Add the following to your `mcp.json` file, where `mcp.json` is the file that det
 {
     "mcpServers" : {
         "notecard": {
-            "command": "/absolute/path/to/notecard/notecard",
+            "command": "/absolute/path/to/note-mcp/notecard/notecard",
             "args": [
                 "--env",
-                "/absolute/path/to/.env"
+                "/absolute/path/to/note-mcp/.env"
             ]
         },
         "notehub": {
-            "command": "/absolute/path/to/notehub/notehub",
+            "command": "/absolute/path/to/note-mcp/notehub/notehub",
             "args": [
                 "--env",
-                "/absolute/path/to/.env"
+                "/absolute/path/to/note-mcp/.env"
             ]
         },
         "dev": {
-            "command": "/absolute/path/to/dev/dev",
+            "command": "/absolute/path/to/note-mcp/dev/dev",
             "args": [
                 "--env",
-                "/absolute/path/to/.env"
+                "/absolute/path/to/note-mcp/.env"
             ]
         }
     }
