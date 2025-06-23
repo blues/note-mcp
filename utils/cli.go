@@ -3,9 +3,77 @@ package utils
 import (
 	"bufio"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
+
+// ExecuteArduinoCLICommand executes a arduino-cli command
+func ExecuteArduinoCLICommand(args []string) (string, error) {
+	cmd := exec.Command("arduino-cli", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to execute command: %v\nOutput: %s", err, string(output))
+	}
+	return string(output), nil
+}
+
+// ExecuteArduinoCLICommandWithLogger executes a arduino-cli command with logging support
+// Provides enhanced logging and real-time output capture for any arduino-cli command
+func ExecuteArduinoCLICommandWithLogger(args []string, logger *MCPLogger) (string, error) {
+	if logger != nil {
+		logger.Infof("Executing arduino-cli command: %v", args)
+	}
+
+	cmd := exec.Command("arduino-cli", args...)
+	cmd.Env = os.Environ()
+
+	// Create a user-writable temporary directory for arduino-cli operations
+	// This ensures arduino-cli has a safe place to write temporary files
+	var tempDir string
+	var shouldCleanup bool
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		if logger != nil {
+			logger.Warningf("Could not get user home directory: %v", err)
+		}
+	} else {
+		// Create a temporary directory in the user's home directory
+		tempDir = filepath.Join(homeDir, ".arduino-cli-temp")
+		if err := os.MkdirAll(tempDir, 0755); err != nil {
+			if logger != nil {
+				logger.Warningf("Could not create arduino-cli temp directory: %v", err)
+			}
+		} else {
+			// Set TMPDIR environment variable to point to our writable directory
+			cmd.Env = append(cmd.Env, "TMPDIR="+tempDir)
+			shouldCleanup = true
+			if logger != nil {
+				logger.Debugf("Set TMPDIR to: %s", tempDir)
+			}
+		}
+	}
+
+	// Ensure cleanup of temporary directory after command completion
+	defer func() {
+		if shouldCleanup && tempDir != "" {
+			if err := os.RemoveAll(tempDir); err != nil {
+				if logger != nil {
+					logger.Warningf("Failed to clean up temporary directory %s: %v", tempDir, err)
+				}
+			} else {
+				if logger != nil {
+					logger.Debugf("Cleaned up temporary directory: %s", tempDir)
+				}
+			}
+		}
+	}()
+
+	// Use streaming output to capture real-time progress for all commands
+	return executeWithStreamingLogging(cmd, logger, args)
+}
 
 // ExecuteNotecardCommand executes a notecard command
 func ExecuteNotecardCommand(args []string) (string, error) {

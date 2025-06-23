@@ -2,5 +2,10 @@ notecard
 !notecard/
 notehub
 !notehub/
+dev
+!dev/
 .env
 dist
+build/
+app/
+.DS_Store

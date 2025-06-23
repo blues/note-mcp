@@ -5,7 +5,7 @@ go 1.23.6
 require (
 	github.com/joho/godotenv v1.5.1
 	github.com/mark3labs/mcp-go v0.29.0
-	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
+	golang.org/x/text v0.26.0
 )
 
 require (

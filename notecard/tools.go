@@ -1,243 +1,11 @@
 package main
 
 import (
-	"context"
-	"encoding/xml"
-	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"os/user"
-	"regexp"
-	"strconv"
-	"strings"
-	"time"
-
-	"note-mcp/utils"
-
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// ConfigDir returns the config directory
-func getConfigDir() string {
-	usr, err := user.Current()
-	if err != nil {
-		return "."
-	}
-	path := usr.HomeDir + "/note"
-	return path
-}
-
-// Get the pathname of config settings
-func getConfigSettingsPath() string {
-	return getConfigDir() + "/config.json"
-}
-
-// S3ListBucketResult represents the XML structure returned by S3 list bucket API
-type S3ListBucketResult struct {
-	XMLName  xml.Name `xml:"ListBucketResult"`
-	Contents []struct {
-		Key string `xml:"Key"`
-	} `xml:"Contents"`
-}
-
-// compareVersions compares two semantic version strings
-// Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if v1 == v2
-func compareVersions(v1, v2 string) int {
-	parts1 := strings.Split(v1, ".")
-	parts2 := strings.Split(v2, ".")
-
-	maxLen := len(parts1)
-	if len(parts2) > maxLen {
-		maxLen = len(parts2)
-	}
-
-	for i := 0; i < maxLen; i++ {
-		var p1, p2 int
-		if i < len(parts1) {
-			p1, _ = strconv.Atoi(parts1[i])
-		}
-		if i < len(parts2) {
-			p2, _ = strconv.Atoi(parts2[i])
-		}
-
-		if p1 > p2 {
-			return 1
-		}
-		if p1 < p2 {
-			return -1
-		}
-	}
-	return 0
-}
-
-// extractKeysFromXml extracts firmware keys from S3 XML response
-func extractKeysFromXml(xmlData []byte) ([]string, error) {
-	var result S3ListBucketResult
-	if err := xml.Unmarshal(xmlData, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse XML: %w", err)
-	}
-
-	keys := make([]string, len(result.Contents))
-	for i, content := range result.Contents {
-		keys[i] = content.Key
-	}
-	return keys, nil
-}
-
-// extractAvailableVersions extracts unique version numbers from firmware keys
-func extractAvailableVersions(relevantKeys []string) []string {
-	versionRegex := regexp.MustCompile(`-(\d+\.\d+\.\d+\.\d+)\.(?:bin|dfu)`)
-	versionSet := make(map[string]bool)
-
-	for _, key := range relevantKeys {
-		matches := versionRegex.FindStringSubmatch(key)
-		if len(matches) > 1 {
-			versionSet[matches[1]] = true
-		}
-	}
-
-	versions := make([]string, 0, len(versionSet))
-	for version := range versionSet {
-		versions = append(versions, version)
-	}
-	return versions
-}
-
-// getNotecardTypeFromModel determines Notecard type from model string
-func getNotecardTypeFromModel(notecardModel string) string {
-	if notecardModel == "" {
-		return ""
-	}
-
-	// Mapping from firmware type prefix to substrings found in model names
-	notecardTypeMap := map[string][]string{
-		"":   {"500"},            // e.g., "NOTE-NBGL-500" maps to ""
-		"u5": {"NB", "MB", "WB"}, // e.g., "NOTE-WBNA", "NOTE-NBGL", "NOTE-MBNA" map to "u5"
-		"wl": {"LW"},             // e.g., "NOTE-LWL" maps to "wl"
-		"s3": {"ESP"},            // e.g., "NOTE-ESP32" maps to "s3"
-	}
-
-	for notecardType, modelSubstrings := range notecardTypeMap {
-		for _, substring := range modelSubstrings {
-			if strings.Contains(notecardModel, substring) {
-				return notecardType
-			}
-		}
-	}
-
-	return "" // Return empty string if no match found
-}
-
-// listAvailableFirmwareVersions fetches available firmware versions for a given type
-func listAvailableFirmwareVersions(updateChannel, notecardType string) ([]string, error) {
-	firmwareIndexUrl := fmt.Sprintf("https://s3.us-east-1.amazonaws.com/notecard-firmware?prefix=%s", updateChannel)
-
-	resp, err := http.Get(firmwareIndexUrl)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch firmware index: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch firmware index: %s", resp.Status)
-	}
-
-	xmlData, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	allKeys, err := extractKeysFromXml(xmlData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract keys from XML: %w", err)
-	}
-
-	if len(allKeys) == 0 {
-		return []string{}, nil
-	}
-
-	var relevantKeys []string
-	searchPattern := fmt.Sprintf("-%s-", notecardType)
-	for _, key := range allKeys {
-		if strings.Contains(key, searchPattern) {
-			relevantKeys = append(relevantKeys, key)
-		}
-	}
-
-	if len(relevantKeys) == 0 {
-		return []string{}, nil
-	}
-
-	// 4. Extract and return unique versions
-	availableVersions := extractAvailableVersions(relevantKeys)
-	return availableVersions, nil
-}
-
-// getLatestFirmwareVersion returns the latest firmware version for a given update channel and notecard type
-func getLatestFirmwareVersion(updateChannel, notecardType string) (string, error) {
-	versions, err := listAvailableFirmwareVersions(updateChannel, notecardType)
-	if err != nil {
-		return "", err
-	}
-
-	if len(versions) == 0 {
-		return "", fmt.Errorf("no firmware versions found for %s/%s", updateChannel, notecardType)
-	}
-
-	// Find the latest version by comparing all versions
-	latestVersion := versions[0]
-	for _, version := range versions[1:] {
-		if compareVersions(version, latestVersion) > 0 {
-			latestVersion = version
-		}
-	}
-
-	return latestVersion, nil
-}
-
-// downloadFirmware downloads a firmware binary from the given URL
-func downloadFirmware(url string) ([]byte, error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("failed to download firmware: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to download firmware: %s at %s", resp.Status, url)
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read firmware data: %w", err)
-	}
-
-	return data, nil
-}
-
-// constructFirmwareURL builds the firmware download URL based on parameters
-func constructFirmwareURL(updateChannel, notecardType, version string) string {
-	var filename string
-	directory := fmt.Sprintf("notecard-%s", version)
-
-	if updateChannel == "DevRel" {
-		updateChannel = fmt.Sprintf("DevRel/%s", strings.Join(strings.Split(version, ".")[:3], "."))
-	}
-
-	if notecardType == "" {
-		// For NOTE-NBGL-500 and similar
-		filename = fmt.Sprintf("notecard-%s.bin", version)
-	} else {
-		// For other notecard types
-		filename = fmt.Sprintf("notecard-%s-%s.bin", notecardType, version)
-	}
-
-	return fmt.Sprintf("https://s3.us-east-1.amazonaws.com/notecard-firmware/%s/%s/%s", updateChannel, directory, filename)
-}
-
 func CreateNotecardInitializeTool() mcp.Tool {
-	return mcp.NewTool("initialize",
+	return mcp.NewTool("notecard_initialize",
 		mcp.WithDescription("Initialize a connection to the Notecard for communication. This creates a notecard object that can be used for subsequent operations."),
 		mcp.WithString("port",
 			mcp.Description("The port to connect to the Notecard. If not provided, the default port will be used."),
@@ -252,8 +20,8 @@ func CreateNotecardInitializeTool() mcp.Tool {
 }
 
 func CreateNotecardRequestTool() mcp.Tool {
-	return mcp.NewTool("request",
-		mcp.WithDescription("Send a request to the Notecard and return the response. The notecard must be initialized first and you should verify that the request is valid before sending it (e.g. by using the 'docs://api/overview' resource). The request type is the JSON string of the request to send to the Notecard, e.g. '{\"req\":\"card.version\"}' or '{\"req\":\"card.temp\",\"minutes\":60}'. If a request is unknown, you can use the 'validate-request' tool to validate it. If the request is valid, you can use this tool to send it to the Notecard."),
+	return mcp.NewTool("notecard_request",
+		mcp.WithDescription("Send a request to the Notecard and return the response. The notecard must be initialized first and you should check you have up-to-date API documentation before sending it (by using the 'notecard_get_apis' tool). The request type is the JSON string of the request to send to the Notecard, e.g. '{\"req\":\"card.version\"}' or '{\"req\":\"card.temp\",\"minutes\":60}'. If a request is unknown, you can use the 'notecard_request_validate' tool to validate it. If the request is valid, you can use this tool to send it to the Notecard."),
 		mcp.WithString("request",
 			mcp.Required(),
 			mcp.Description("The request type to send to the Notecard (e.g., '{\"req\":\"card.version\"}', '{\"req\":\"card.status\"}', '{\"req\":\"hub.status\"}', '{\"req\":\"card.temp\",\"minutes\":60}', '{\"req\":\"card.voltage\"}')"),
@@ -262,7 +30,7 @@ func CreateNotecardRequestTool() mcp.Tool {
 }
 
 func CreateNotecardListFirmwareVersionsTool() mcp.Tool {
-	return mcp.NewTool("list-firmware-versions",
+	return mcp.NewTool("notecard_firmware_versions",
 		mcp.WithDescription("Lists all available firmware versions for a given update channel and Notecard model."),
 		mcp.WithString("updateChannel",
 			mcp.Required(),
@@ -275,86 +43,8 @@ func CreateNotecardListFirmwareVersionsTool() mcp.Tool {
 	)
 }
 
-func HandleNotecardInitializeTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	reset := request.GetBool("reset", false)
-	port := request.GetString("port", "")
-	baud := request.GetInt("baud", 0)
-
-	if reset {
-		// check if config exists and delete it
-		if _, err := os.Stat(getConfigSettingsPath()); err == nil {
-			os.Remove(getConfigSettingsPath())
-		}
-	}
-
-	if port != "" {
-		_, err := utils.ExecuteNotecardCommand([]string{"-port", port})
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to set port: %v", err)), nil
-		}
-	}
-
-	if baud != 0 {
-		_, err := utils.ExecuteNotecardCommand([]string{"-portconfig", strconv.Itoa(baud)})
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to set baud rate: %v", err)), nil
-		}
-	}
-
-	output, err := utils.ExecuteNotecardCommand([]string{"-req", "{\"req\":\"card.version\"}"})
-
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to initialize notecard: %v", err)), nil
-	}
-
-	return mcp.NewToolResultText(fmt.Sprintf("Notecard initialized successfully. Output: %s", output)), nil
-}
-
-func HandleNotecardRequestTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-
-	reqType, err := request.RequireString("request")
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Invalid request parameter: %v", err)), nil
-	}
-
-	output, err := utils.ExecuteNotecardCommand([]string{"-req", reqType})
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to send request to notecard: %v", err)), nil
-	}
-
-	return mcp.NewToolResultText(fmt.Sprintf("Response:\n%s", output)), nil
-}
-
-func HandleNotecardListFirmwareVersionsTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	updateChannel, err := request.RequireString("updateChannel")
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Invalid updateChannel parameter: %v", err)), nil
-	}
-
-	notecardModel, err := request.RequireString("notecardModel")
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Invalid notecardModel parameter: %v", err)), nil
-	}
-
-	notecardType := getNotecardTypeFromModel(notecardModel)
-	if notecardType == "" && !strings.Contains(notecardModel, "500") {
-		return mcp.NewToolResultError(fmt.Sprintf("Could not determine Notecard type for model '%s'. Check the provided model.", notecardModel)), nil
-	}
-
-	versions, err := listAvailableFirmwareVersions(updateChannel, notecardType)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Could not list firmware versions: %v", err)), nil
-	}
-
-	if len(versions) == 0 {
-		return mcp.NewToolResultText(fmt.Sprintf("No firmware versions found for %s/%s", updateChannel, notecardModel)), nil
-	}
-
-	return mcp.NewToolResultText(fmt.Sprintf("Available firmware versions for %s: %s", updateChannel, strings.Join(versions, ", "))), nil
-}
-
 func CreateNotecardUpdateFirmwareTool() mcp.Tool {
-	return mcp.NewTool("firmware-update",
+	return mcp.NewTool("notecard_firmware_update",
 		mcp.WithDescription("Downloads and flashes firmware to the Notecard. This tool will download the specified firmware version and perform a sideload update to the connected Notecard. Warn the user that this may take some time and that the Notecard will restart. The Notecard must be initialized first."),
 		mcp.WithString("updateChannel",
 			mcp.Description("The firmware update channel (e.g., 'LTS', 'DevRel', 'nightly')"),
@@ -372,148 +62,8 @@ func CreateNotecardUpdateFirmwareTool() mcp.Tool {
 	)
 }
 
-func HandleNotecardUpdateFirmwareTool(logger *utils.MCPLogger) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		updateChannel := request.GetString("updateChannel", "LTS")
-		notecardModel, err := request.RequireString("notecardModel")
-		if err != nil {
-			logger.Errorf("Firmware update failed: Invalid notecardModel parameter: %v", err)
-			return mcp.NewToolResultError(fmt.Sprintf("Invalid notecardModel parameter: %v", err)), nil
-		}
-
-		version := request.GetString("version", "")
-		force := request.GetBool("force", false)
-
-		// Create a unique progress token for this operation
-		progressToken := fmt.Sprintf("firmware_update_%d", time.Now().Unix())
-
-		// Helper function to send MCP-compliant progress notifications
-		sendProgress := func(progress, total float64, message string) {
-			logger.SendProgressNotification(progressToken, progress, total, message)
-		}
-
-		// Log the start of firmware update with context
-		updateContext := map[string]interface{}{
-			"updateChannel": updateChannel,
-			"notecardModel": notecardModel,
-			"version":       version,
-			"force":         force,
-		}
-		logger.LogWithContext(utils.LogLevelInfo, "Starting firmware update process", updateContext)
-		sendProgress(0, 100, "Starting firmware update process...")
-
-		// Determine notecard type from model
-		notecardType := getNotecardTypeFromModel(notecardModel)
-		if notecardType == "" && !strings.Contains(notecardModel, "500") {
-			logger.Errorf("Could not determine Notecard type for model '%s'", notecardModel)
-			return mcp.NewToolResultError(fmt.Sprintf("Could not determine Notecard type for model '%s'. Check the provided model.", notecardModel)), nil
-		}
-
-		logger.Infof("Determined Notecard type: '%s' for model: '%s'", notecardType, notecardModel)
-		sendProgress(5, 100, fmt.Sprintf("Determined Notecard type: %s", notecardType))
-
-		// If no version specified, get the latest version
-		if version == "" {
-			logger.Info("No version specified, fetching latest version...")
-			sendProgress(10, 100, "Fetching latest firmware version...")
-
-			latestVersion, err := getLatestFirmwareVersion(updateChannel, notecardType)
-			if err != nil {
-				logger.Errorf("Failed to get latest firmware version: %v", err)
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to get latest firmware version: %v", err)), nil
-			}
-			version = latestVersion
-			logger.Infof("Using latest version: %s", version)
-			sendProgress(15, 100, fmt.Sprintf("Using latest version: %s", version))
-		}
-
-		// Get current firmware version for comparison
-		if !force {
-			logger.Info("Checking current firmware version...")
-			sendProgress(20, 100, "Checking current firmware version...")
-
-			response, err := utils.ExecuteNotecardCommand([]string{"-req", "{\"req\":\"card.version\"}"})
-			if err != nil {
-				logger.Errorf("Failed to get current firmware version: %v", err)
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to get current firmware version: %v", err)), nil
-			}
-
-			if strings.Contains(response, version) {
-				logger.Warningf("Notecard is already running version %s, skipping update", version)
-				sendProgress(100, 100, fmt.Sprintf("Already running version %s", version))
-				return mcp.NewToolResultText(fmt.Sprintf("Notecard is already running version %s. Use force=true to update anyway.", version)), nil
-			}
-		} else {
-			logger.Info("Force update enabled, skipping version check")
-			sendProgress(20, 100, "Force update enabled, skipping version check")
-		}
-
-		firmwareURL := constructFirmwareURL(updateChannel, notecardType, version)
-		logger.Infof("Firmware download URL: %s", firmwareURL)
-		sendProgress(25, 100, "Preparing firmware download...")
-
-		logger.Info("Starting firmware download...")
-		sendProgress(30, 100, "Downloading firmware...")
-		firmwareData, err := downloadFirmware(firmwareURL)
-		if err != nil {
-			logger.Errorf("Failed to download firmware: %v", err)
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to download firmware: %v", err)), nil
-		}
-
-		// write firmwareData to a file
-		err = os.WriteFile("/tmp/firmware.bin", firmwareData, 0644)
-		if err != nil {
-			logger.Errorf("Failed to write firmware to file: %v", err)
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to write firmware to file: %v", err)), nil
-		}
-
-		logger.Infof("Successfully downloaded firmware: %d bytes", len(firmwareData))
-		sendProgress(40, 100, fmt.Sprintf("Downloaded firmware: %d bytes", len(firmwareData)))
-
-		logger.Info("Starting firmware sideload to Notecard...")
-		sendProgress(45, 100, "Starting firmware sideload...")
-
-		_, err = utils.ExecuteNotecardCommandWithLogger([]string{"-sideload", "/tmp/firmware.bin", "-fast"}, logger)
-		if err != nil {
-			logger.Errorf("Failed to sideload firmware: %v", err)
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to sideload firmware: %v", err)), nil
-		}
-
-		logger.Info("Firmware sideload completed successfully")
-		sendProgress(100, 100, "Firmware sideload completed.")
-
-		response, err := utils.ExecuteNotecardCommand([]string{"-req", "{\"req\":\"card.version\"}"})
-		if err != nil {
-			logger.Warningf("Could not verify new firmware version: %v", err)
-			return mcp.NewToolResultText(fmt.Sprintf("Firmware update completed to version %s, but could not verify the new version. The Notecard connection has been reestablished.", version)), nil
-		}
-
-		var newVersion string
-		if strings.Contains(response, version) {
-			newVersion = version
-		}
-
-		if newVersion != "" {
-			logger.Infof("Firmware update completed successfully. New version: %s", newVersion)
-
-			// Log completion with context
-			completionContext := map[string]interface{}{
-				"previousVersion": "unknown", // We could store this from earlier
-				"newVersion":      newVersion,
-				"updateChannel":   updateChannel,
-				"notecardModel":   notecardModel,
-			}
-			logger.LogWithContext(utils.LogLevelInfo, "Firmware update completed successfully", completionContext)
-
-			return mcp.NewToolResultText(fmt.Sprintf("Successfully updated Notecard firmware to %s %s. Connection reestablished and verified.", updateChannel, newVersion)), nil
-		}
-
-		return mcp.NewToolResultText(fmt.Sprintf("Successfully updated Notecard firmware to version %s. The Notecard has restarted and connection has been reestablished.", version)), nil
-	}
-}
-
 func CreateNotecardValidateRequestTool() mcp.Tool {
-	return mcp.NewTool("validate-request",
+	return mcp.NewTool("notecard_request_validate",
 		mcp.WithDescription("Validate a Notecard API request against the Notecard API Schema. This helps ensure your request is valid before sending it to the Notecard. To use this tool, you must have the environment variable BLUES exported, otherwise it will just check for JSON validity."),
 		mcp.WithString("request",
 			mcp.Required(),
@@ -525,37 +75,69 @@ func CreateNotecardValidateRequestTool() mcp.Tool {
 	)
 }
 
-func HandleNotecardValidateRequestTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	reqString, err := request.RequireString("request")
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Invalid request parameter: %v", err)), nil
-	}
+func CreateDecryptNoteTool() mcp.Tool {
+	return mcp.NewTool("notecard_decrypt_note",
+		mcp.WithDescription("Get instructions for decrypting a note using the Notecard. Returns step-by-step instructions to sync with the hub and decrypt the note."),
+		mcp.WithString("note_file",
+			mcp.Description("The note file to decrypt (e.g., 'mysecrets.qi'). Defaults to 'mysecrets.qi' if not provided."),
+		),
+	)
+}
 
-	schemaURL := request.GetString("schema_url", "")
-	// set the NOTE_JSON_SCHEMA_URL environment variable if a schema URL is provided, otherwise unset it
-	if schemaURL != "" {
-		os.Setenv("NOTE_JSON_SCHEMA_URL", schemaURL)
-	} else {
-		os.Unsetenv("NOTE_JSON_SCHEMA_URL")
-	}
+func CreateProvisionNotecardTool() mcp.Tool {
+	return mcp.NewTool("notecard_provision",
+		mcp.WithDescription("Get instructions for provisioning a new Notecard to a Notehub project, creating a new project if necessary. Returns comprehensive provisioning steps including WiFi configuration if applicable."),
+		mcp.WithString("product_uid",
+			mcp.Required(),
+			mcp.Description("Product UID within the project, typically in the format 'com.company.username:productname'. Do not assume you know the Product UID. You should first find the Product UID using the 'product_list' tool via the Notehub MCP tool."),
+		),
+		mcp.WithString("project_uid",
+			mcp.Required(),
+			mcp.Description("Project UID, typically in the format 'app:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'."),
+		),
+		mcp.WithString("ssid",
+			mcp.Description("Optional SSID for WiFi provisioning. Do not assume you know the SSID. If the Notecard supports WiFi, stop and ask the user for the SSID."),
+		),
+		mcp.WithString("password",
+			mcp.Description("Optional password for WiFi provisioning. Do not assume you know the password. If the Notecard supports WiFi, stop and ask the user for the password."),
+		),
+	)
+}
 
-	output, err := utils.ExecuteNotecardCommandWithEnv([]string{"-req", reqString, "-dry", "-verbose"}, os.Environ())
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Attempt to validate request failed: %v", err)), nil
-	}
+func CreateTroubleshootConnectionTool() mcp.Tool {
+	return mcp.NewTool("notecard_troubleshoot_connection",
+		mcp.WithDescription("Get troubleshooting instructions for when a Notecard will not connect to Notehub. Provides step-by-step diagnostic and resolution suggestions."),
+		mcp.WithString("error_message",
+			mcp.Required(),
+			mcp.Description("Error message or symptom description from the Notecard"),
+		),
+		mcp.WithString("notecard_type",
+			mcp.Required(),
+			mcp.Description("Notecard type (e.g., 'WiFi', 'Cellular', 'LoRa') to provide type-specific troubleshooting"),
+		),
+	)
+}
 
-	// strip the newline from the output
-	output = strings.ReplaceAll(output, "\n", "")
+func CreateSendNoteTool() mcp.Tool {
+	return mcp.NewTool("notecard_send_note",
+		mcp.WithDescription("Get instructions for sending notes from a Notecard to Notehub. Returns detailed steps for adding data to notefiles and syncing to the cloud."),
+		mcp.WithString("note_file",
+			mcp.Description("The name of the notefile to send data to (e.g., 'sensors.qo', 'data.qo'). Use '.qo' extension for outbound queue files or '.dbo' for database files. To use TLS encryption, use .qos and .dbos. Defaults to 'data.qo' if not provided."),
+		),
+		mcp.WithString("note_data",
+			mcp.Description("JSON string of the data to include in the note body, e.g. '{\"temperature\":23.5,\"humidity\":65,\"timestamp\":\"2024-01-15T10:30:00Z\"}'"),
+		),
+		mcp.WithString("note_sync",
+			mcp.Description("Sync the note immediately. Defaults to false."),
+		),
+	)
+}
 
-	// If the output is not equal to the request, return the reason why it failed
-	if output != reqString {
-		return mcp.NewToolResultText(fmt.Sprintf("Validation for %s failed: %s", reqString, output)), nil
-	}
-
-	// if the BLUES environment variable is not set, return a warning
-	if os.Getenv("BLUES") == "" {
-		return mcp.NewToolResultText(fmt.Sprintf("✓ Request validation successful: The request '%s' is valid JSON.", reqString)), nil
-	} else {
-		return mcp.NewToolResultText(fmt.Sprintf("✓ Request validation successful: The request '%s' is valid according to the Notecard API schema.", reqString)), nil
-	}
+func CreateNotecardGetAPIsTool() mcp.Tool {
+	return mcp.NewTool("notecard_get_apis",
+		mcp.WithDescription("Get comprehensive documentation for all Notecard APIs or a specific API category. Returns detailed API information organized by category including endpoints, parameters, and usage examples."),
+		mcp.WithString("category",
+			mcp.Description("Optional API category to get specific documentation for. Valid categories: 'card', 'hub', 'note', 'env', 'file', 'web', 'var', 'ntn', 'dfu'. If not provided, returns overview of all APIs."),
+		),
+	)
 }

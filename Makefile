@@ -10,9 +10,10 @@ LDFLAGS=-w -s
 # Project directories
 NOTECARD_DIR=./notecard
 NOTEHUB_DIR=./notehub
+DEV_DIR=./dev
 
 # Default target
-all: build
+all: vet build
 
 # Help target
 help: ## Show this help message
@@ -20,8 +21,10 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 # Build targets
-build: notecard notehub ## Build all MCP servers
+build: notecard notehub dev ## Build all MCP servers
+	@echo "✓ Build complete"
 
+# Build targets for each MCP server
 notecard: ## Build the Notecard MCP server
 	@echo "Building notecard..."
 	cd $(NOTECARD_DIR) && $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o notecard
@@ -29,6 +32,10 @@ notecard: ## Build the Notecard MCP server
 notehub: ## Build the Notehub MCP server
 	@echo "Building notehub..."
 	cd $(NOTEHUB_DIR) && $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o notehub
+
+dev: ## Build the Dev MCP server
+	@echo "Building dev..."
+	cd $(DEV_DIR) && $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o dev
 
 inspect-notecard: notecard ## Run MCP inspector for notecard
 	@echo "Starting MCP inspector for notecard..."
@@ -38,12 +45,16 @@ inspect-notehub: notehub ## Run MCP inspector for notehub
 	@echo "Starting MCP inspector for notehub..."
 	npx @modelcontextprotocol/inspector --config mcp.json --server notehub
 
+inspect-dev: dev ## Run MCP inspector for dev
+	@echo "Starting MCP inspector for dev..."
+	npx @modelcontextprotocol/inspector --config mcp.json --server dev
+
 # Treat the argument as a target to prevent "No rule to make target" errors
 %:
 	@:
 
 # Documentation targets
-docs: docs-notehub docs-notecard ## Generate documentation for all packages
+docs: docs-notehub docs-notecard docs-dev ## Generate documentation for all packages
 
 docs-notehub: ## Generate Go documentation for notehub package
 	@echo "Generating Notehub API documentation..."
@@ -57,6 +68,12 @@ docs-notecard: ## Generate Go documentation for notecard package
 	@go doc -all ./notecard > ./notecard/docs/API_DOCS.md
 	@echo "✓ Notecard documentation generated: notecard/docs/API_DOCS.md"
 
+docs-dev: ## Generate Go documentation for dev package
+	@echo "Generating Dev API documentation..."
+	@mkdir -p dev/docs
+	@go doc -all ./dev > ./dev/docs/API_DOCS.md
+	@echo "✓ Dev documentation generated: dev/docs/API_DOCS.md"
+
 # Development targets
 test: ## Run tests for all packages
 	@echo "Running tests..."
@@ -66,18 +83,18 @@ clean: ## Clean build artifacts and generated docs
 	@echo "Cleaning build artifacts..."
 	rm -f $(NOTECARD_DIR)/notecard
 	rm -f $(NOTEHUB_DIR)/notehub
-	@rm -rf notehub/docs notecard/docs
+	rm -f $(DEV_DIR)/dev
+	@rm -rf notehub/docs notecard/docs dev/docs
 	@echo "✓ Clean complete"
 
 # Utility targets
 fmt: ## Format Go code
 	@echo "Formatting Go code..."
-	@go fmt ./notehub/... ./notecard/...
+	@go fmt ./notehub/... ./notecard/... ./dev/...
 	@echo "✓ Code formatted"
 
 vet: ## Run go vet on all packages
-	@echo "Running go vet..."
-	@go vet ./notehub/... ./notecard/...
+	@go vet ./notehub/... ./notecard/... ./dev/...
 	@echo "✓ Vet complete"
 
-dev: fmt vet test docs build ## Run full development workflow (format, vet, test, docs, build)
+develop: fmt vet test docs build ## Run full development workflow (format, vet, test, docs, build)

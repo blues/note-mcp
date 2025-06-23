@@ -13,6 +13,13 @@
                 "--env",
                 ".env"
             ]
+        },
+        "dev": {
+            "command": "dev/dev",
+            "args": [
+                "--env",
+                ".env"
+            ]
         }
     }
 }

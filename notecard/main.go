@@ -4,7 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 
+	"note-mcp/notecard/lib"
 	"note-mcp/utils"
 
 	"github.com/joho/godotenv"
@@ -35,7 +37,6 @@ func main() {
 		"Notecard MCP",
 		utils.Commit,
 		server.WithToolCapabilities(true),
-		server.WithPromptCapabilities(true),
 		server.WithResourceCapabilities(true, true),
 		server.WithRecovery(),
 	)
@@ -54,32 +55,36 @@ func main() {
 	notecardRequestTool := CreateNotecardRequestTool()
 	notecardListFirmwareVersionsTool := CreateNotecardListFirmwareVersionsTool()
 	notecardUpdateFirmwareTool := CreateNotecardUpdateFirmwareTool()
-	notecardValidateRequestTool := CreateNotecardValidateRequestTool()
+	decryptNoteTool := CreateDecryptNoteTool()
+	provisionNotecardTool := CreateProvisionNotecardTool()
+	troubleshootConnectionTool := CreateTroubleshootConnectionTool()
+	sendNoteTool := CreateSendNoteTool()
+	notecardGetAPIsTool := CreateNotecardGetAPIsTool()
 
-	// Add prompts
-	decryptNotePrompt := CreateDecryptNotePrompt()
-	requestValidatorPrompt := CreateRequestValidatorPrompt()
-
-	// Add API resources with their handlers
+	// Add Docs API resources with their handlers
 	for _, resource := range APIResources {
 		s.AddResource(resource, HandleAPIResource)
 	}
 
 	// Add tool handlers
-	s.AddTool(notecardInitializeTool, HandleNotecardInitializeTool)
-	s.AddTool(notecardRequestTool, HandleNotecardRequestTool)
-	s.AddTool(notecardListFirmwareVersionsTool, HandleNotecardListFirmwareVersionsTool)
-	s.AddTool(notecardUpdateFirmwareTool, HandleNotecardUpdateFirmwareTool(logger))
-	s.AddTool(notecardValidateRequestTool, HandleNotecardValidateRequestTool)
+	s.AddTool(notecardInitializeTool, lib.HandleNotecardInitializeTool)
+	s.AddTool(notecardRequestTool, lib.HandleNotecardRequestTool)
+	s.AddTool(notecardListFirmwareVersionsTool, lib.HandleNotecardListFirmwareVersionsTool)
+	s.AddTool(notecardUpdateFirmwareTool, lib.HandleNotecardUpdateFirmwareTool(logger))
+	s.AddTool(decryptNoteTool, lib.HandleDecryptNoteTool)
+	s.AddTool(provisionNotecardTool, lib.HandleProvisionNotecardTool)
+	s.AddTool(troubleshootConnectionTool, lib.HandleTroubleshootConnectionTool)
+	s.AddTool(sendNoteTool, lib.HandleSendNoteTool)
+	s.AddTool(notecardGetAPIsTool, lib.HandleNotecardGetAPIsTool)
 
-	// Add prompt handlers
-	s.AddPrompt(decryptNotePrompt, HandleDecryptNotePrompt)
-	s.AddPrompt(requestValidatorPrompt, HandleRequestValidatorPrompt)
+	// Add tools hidden behind BLUES environment variable
+	if _, ok := os.LookupEnv("BLUES"); ok {
+		notecardValidateRequestTool := CreateNotecardValidateRequestTool()
+		s.AddTool(notecardValidateRequestTool, lib.HandleNotecardValidateRequestTool)
+	}
 
-	// Log that server is ready
 	logger.Info("Notecard MCP server ready with logging capabilities")
 
-	// Start the server
 	if err := server.ServeStdio(s); err != nil {
 		logger.Errorf("Server error: %v", err)
 		fmt.Printf("Server error: %v\n", err)
