@@ -1,8 +1,5 @@
 # note-mcp
 
-<<<<<<< Updated upstream
-MCP servers for Notecard and Notehub
-=======
 MCP servers for Notecard, Notehub, and Development.
 
 > [!WARNING]
@@ -54,11 +51,10 @@ NOTEHUB_PASS="your_notehub_password"
 ```
 
 Additional variables will be added.
->>>>>>> Stashed changes
 
 ## Development
 
-To run the MCP inspector, you'll need node.js installed (atleast v18).
+To run the MCP inspector, you'll need nodejs installed (atleast v18).
 
 For Notecard MCP:
 
@@ -70,4 +66,10 @@ For Notehub MCP:
 
 ```bash
 make inspect notehub
+```
+
+For dev MCP:
+
+```bash
+make inspect dev
 ```
