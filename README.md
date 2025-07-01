@@ -7,6 +7,13 @@ MCP servers for Notecard, Notehub, and Development.
 
 ## Build
 
+To build the MCP servers, you'll need to have the following tools installed:
+
+- Go (atleast v1.23)
+- Make
+
+Then, run the following command:
+
 ```bash
 make build
 ```

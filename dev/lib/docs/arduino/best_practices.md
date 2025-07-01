@@ -9,6 +9,10 @@ When creating a new Arduino project, there are a few best practices to follow to
 - Create a 'WORKFLOW.mmd' in the same directory as the sketch, e.g. 'app/WORKFLOW.mmd'. This should contain a diagram of the flow of code in the project.
 - Always assume the user is using the Blues Feather MCU (e.g. Swan) and Notecarrier-F. Where sensors are concerned, always default to using the I2C interface, if possible.
 
+## Requirements
+
+- Always use templates for notes.
+
 ## Suggestions
 
 - Do not introduce power management features until the user has confirmed that the sketch is working. Offer this as a follow up change.
@@ -74,13 +78,15 @@ You will need to know the following before starting:
 // in reverse, such as "com.gmail.smith.lisa:test-device" or
 // "com.outlook.gates.bill.demo"
 
-// This is the Product Unique Identifier for your device
+// This is the Product Unique Identifier for your device. Only define this if you have already claimed a product identifier in the Notecard.
+#define myProductID PRODUCT_UID // "com.my-company.my-name:my-project"
+
+// This is a check to ensure that there is a product identifier defined. If not, ask the user if they already have a product identifier of if they would like to create one.
 #ifndef PRODUCT_UID
-#define PRODUCT_UID "" // "com.my-company.my-name:my-project"
+#define PRODUCT_UID ""
 #pragma message "PRODUCT_UID is not defined in this example. Please ensure your Notecard has a product identifier set before running this example or define it in code here. More details at https://dev.blues.io/tools-and-sdks/samples/product-uid"
 #endif
 
-#define myProductID PRODUCT_UID
 Notecard notecard;
 
 // One-time Arduino initialization

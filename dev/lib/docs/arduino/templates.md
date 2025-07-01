@@ -105,6 +105,8 @@ In `note-c` and `note-arduino`, the following data types are defined:
 | Unsigned Integer | TUINT8, TUINT16, TUINT24, TUINT32     | Unsigned integers of various sizes |
 | Float            | TFLOAT16, TFLOAT32, TFLOAT64          | IEEE 754 floating point numbers    |
 
+If a project uses `note-arduino` or `note-c`, use the macro definitions in the `note-c` library to define the data types.
+
 ## Using Arrays in Templates
 
 If you're working with more complex data structures, it's possible to use arrays of data types when creating a template. The same definitions are used when assigning data types to the array.
@@ -260,7 +262,7 @@ When using the string data type in a compact template, each string value in a No
 
 ```json
 {
- "err": "error adding note: compact mode only supports strings up to 255 bytes 
+ "err": "error adding note: compact mode only supports strings up to 255 bytes
  {template-incompatible}"
 }
 ```
