@@ -121,6 +121,12 @@ func HandleDeviceListTool(ctx context.Context, request mcp.CallToolRequest) (*mc
 	deviceUIDs := request.GetStringSlice("deviceUID", []string{})
 	tags := request.GetStringSlice("tags", []string{})
 	serialNumbers := request.GetStringSlice("serialNumber", []string{})
+	fleetUIDs := request.GetStringSlice("fleetUID", []string{})
+	notecardFirmware := request.GetString("notecardFirmware", "")
+	location := request.GetString("location", "")
+	hostFirmware := request.GetString("hostFirmware", "")
+	productUIDs := request.GetStringSlice("productUID", []string{})
+	skus := request.GetStringSlice("sku", []string{})
 
 	params := url.Values{}
 
@@ -152,6 +158,38 @@ func HandleDeviceListTool(ctx context.Context, request mcp.CallToolRequest) (*mc
 		}
 	}
 
+	// Add fleet UID filters
+	for _, fleetUID := range fleetUIDs {
+		if fleetUID := strings.TrimSpace(fleetUID); fleetUID != "" {
+			params.Add("fleetUID", fleetUID)
+		}
+	}
+
+	// Add additional filters
+	if notecardFirmware != "" {
+		params.Add("notecardFirmware", notecardFirmware)
+	}
+	if location != "" {
+		params.Add("location", location)
+	}
+	if hostFirmware != "" {
+		params.Add("hostFirmware", hostFirmware)
+	}
+
+	// Add product UID filters
+	for _, productUID := range productUIDs {
+		if productUID := strings.TrimSpace(productUID); productUID != "" {
+			params.Add("productUID", productUID)
+		}
+	}
+
+	// Add SKU filters
+	for _, sku := range skus {
+		if sku := strings.TrimSpace(sku); sku != "" {
+			params.Add("sku", sku)
+		}
+	}
+
 	queryString := ""
 	if len(params) > 0 {
 		queryString = "?" + params.Encode()
@@ -177,7 +215,103 @@ func HandleProjectEventsTool(ctx context.Context, request mcp.CallToolRequest) (
 		return mcp.NewToolResultError(fmt.Sprintf("Invalid project_uid parameter: %v", err)), nil
 	}
 
-	endpoint := fmt.Sprintf("/v1/projects/%s/events", projectUID)
+	// Extract optional parameters
+	pageSize := request.GetInt("pageSize", 0)
+	pageNum := request.GetInt("pageNum", 0)
+	deviceUIDs := request.GetStringSlice("deviceUID", []string{})
+	sortBy := request.GetString("sortBy", "")
+	sortOrder := request.GetString("sortOrder", "")
+	startDate := request.GetString("startDate", "")
+	endDate := request.GetString("endDate", "")
+	dateType := request.GetString("dateType", "")
+	systemFilesOnly := request.GetString("systemFilesOnly", "")
+	files := request.GetString("files", "")
+	format := request.GetString("format", "")
+	serialNumbers := request.GetStringSlice("serialNumber", []string{})
+	fleetUIDs := request.GetStringSlice("fleetUID", []string{})
+	sessionUIDs := request.GetStringSlice("sessionUID", []string{})
+	eventUIDs := request.GetStringSlice("eventUID", []string{})
+	selectFields := request.GetString("selectFields", "")
+
+	params := url.Values{}
+
+	if pageSize > 0 {
+		params.Add("pageSize", strconv.Itoa(pageSize))
+	}
+	if pageNum > 0 {
+		params.Add("pageNum", strconv.Itoa(pageNum))
+	}
+
+	// Add device UID filters
+	for _, deviceUID := range deviceUIDs {
+		if deviceUID := strings.TrimSpace(deviceUID); deviceUID != "" {
+			params.Add("deviceUID", deviceUID)
+		}
+	}
+
+	if sortBy != "" {
+		params.Add("sortBy", sortBy)
+	}
+	if sortOrder != "" {
+		params.Add("sortOrder", sortOrder)
+	}
+	if startDate != "" {
+		params.Add("startDate", startDate)
+	}
+	if endDate != "" {
+		params.Add("endDate", endDate)
+	}
+	if dateType != "" {
+		params.Add("dateType", dateType)
+	}
+	if systemFilesOnly != "" {
+		params.Add("systemFilesOnly", systemFilesOnly)
+	}
+	if files != "" {
+		params.Add("files", files)
+	}
+	if format != "" {
+		params.Add("format", format)
+	}
+
+	// Add serial number filters
+	for _, serialNumber := range serialNumbers {
+		if serialNumber := strings.TrimSpace(serialNumber); serialNumber != "" {
+			params.Add("serialNumber", serialNumber)
+		}
+	}
+
+	// Add fleet UID filters
+	for _, fleetUID := range fleetUIDs {
+		if fleetUID := strings.TrimSpace(fleetUID); fleetUID != "" {
+			params.Add("fleetUID", fleetUID)
+		}
+	}
+
+	// Add session UID filters
+	for _, sessionUID := range sessionUIDs {
+		if sessionUID := strings.TrimSpace(sessionUID); sessionUID != "" {
+			params.Add("sessionUID", sessionUID)
+		}
+	}
+
+	// Add event UID filters
+	for _, eventUID := range eventUIDs {
+		if eventUID := strings.TrimSpace(eventUID); eventUID != "" {
+			params.Add("eventUID", eventUID)
+		}
+	}
+
+	if selectFields != "" {
+		params.Add("selectFields", selectFields)
+	}
+
+	queryString := ""
+	if len(params) > 0 {
+		queryString = "?" + params.Encode()
+	}
+
+	endpoint := fmt.Sprintf("/v1/projects/%s/events%s", projectUID, queryString)
 	response, err := MakeNotehubAPIRequest("GET", endpoint, nil)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to list events: %v", err)), nil

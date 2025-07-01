@@ -91,11 +91,18 @@ func CreateProjectCreateTool() mcp.Tool {
 //   - deviceUID (optional): Array of specific device UIDs to filter by
 //   - tags (optional): Array of tags to filter devices by
 //   - serialNumber (optional): Array of serial numbers to filter devices by
+//   - fleetUID (optional): Fleet UID to filter devices by
+//   - notecardFirmware (optional): Notecard firmware version to filter by
+//   - location (optional): Location to filter devices by
+//   - hostFirmware (optional): Host firmware version to filter by
+//   - productUID (optional): Product UID to filter devices by
+//   - sku (optional): SKU to filter devices by
 //
 // Example usage:
 //   - List all devices: {"project_uid": "app:123..."}
 //   - Filter by tags: {"project_uid": "app:123...", "tags": ["production", "sensor"]}
 //   - Filter by device UIDs: {"project_uid": "app:123...", "deviceUID": ["dev:123...", "dev:456..."]}
+//   - Filter by fleet: {"project_uid": "app:123...", "fleetUID": "fleet:123..."}
 //   - Paginated results: {"project_uid": "app:123...", "pageSize": 25, "pageNum": 2}
 //
 // Returns:
@@ -132,16 +139,106 @@ func CreateDeviceListTool() mcp.Tool {
 				"type": "string",
 			}),
 		),
+		mcp.WithArray("fleetUID",
+			mcp.Description("Optional array of fleet UIDs to filter devices by. Example: ['fleet:00000000-0000-0000-0000-000000000001', 'fleet:00000000-0000-0000-0000-000000000002']"),
+			mcp.Items(map[string]any{
+				"type": "string",
+			}),
+		),
+		mcp.WithString("notecardFirmware",
+			mcp.Description("Optional Notecard firmware version to filter devices by (e.g., '6.2.1.15266')"),
+		),
+		mcp.WithString("location",
+			mcp.Description("Optional location to filter devices by"),
+		),
+		mcp.WithString("hostFirmware",
+			mcp.Description("Optional host firmware version to filter devices by"),
+		),
+		mcp.WithArray("productUID",
+			mcp.Description("Optional array of product UIDs to filter devices by. Example: ['com.company.user:product1', 'com.company.user:product2']"),
+			mcp.Items(map[string]any{
+				"type": "string",
+			}),
+		),
+		mcp.WithArray("sku",
+			mcp.Description("Optional array of SKUs to filter devices by. Example: ['NOTE-WBEX', 'NOTE-NBGL-500']"),
+			mcp.Items(map[string]any{
+				"type": "string",
+			}),
+		),
 	)
 }
 
 // CreateProjectEventsTool creates a tool for listing events in a Notehub project
 func CreateProjectEventsTool() mcp.Tool {
 	return mcp.NewTool("project_events",
-		mcp.WithDescription("List all events in a specific Notehub project"),
+		mcp.WithDescription("List all events in a specific Notehub project. Use optional parameters to filter the results."),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project to list events for"),
+		),
+		mcp.WithNumber("pageSize",
+			mcp.Description("Optional number of events to return per page"),
+		),
+		mcp.WithNumber("pageNum",
+			mcp.Description("Optional page number of results (must be >= 1)"),
+		),
+		mcp.WithArray("deviceUID",
+			mcp.Description("Optional array of device UIDs to filter events for specific devices. Example: ['dev:123456789', 'dev:987654321']"),
+			mcp.Items(map[string]any{
+				"type": "string",
+			}),
+		),
+		mcp.WithString("sortBy",
+			mcp.Description("Optional field to sort results by. Valid values are: best_id, device_serial, device_uid, captured, modified, device_location, tower_location, triangulated_location, best_location"),
+		),
+		mcp.WithString("sortOrder",
+			mcp.Description("Optional sort order: 'asc' or 'desc'"),
+		),
+		mcp.WithString("startDate",
+			mcp.Description("Optional start date for filtering events (ISO 8601 format)"),
+		),
+		mcp.WithString("endDate",
+			mcp.Description("Optional end date for filtering events (ISO 8601 format)"),
+		),
+		mcp.WithString("dateType",
+			mcp.Description("Optional date type for filtering: 'captured' or 'when'"),
+		),
+		mcp.WithString("systemFilesOnly",
+			mcp.Description("Optional filter to show only system files: 'true' or 'false'"),
+		),
+		mcp.WithString("files",
+			mcp.Description("Optional comma-separated list of notefiles to filter by, e.g. 'data.qo,sensors.qo'"),
+		),
+		mcp.WithString("format",
+			mcp.Description("Optional response format: 'json' or 'csv'"),
+		),
+		mcp.WithArray("serialNumber",
+			mcp.Description("Optional array of device serial numbers to filter events. Example: ['SN001', 'SN002']"),
+			mcp.Items(map[string]any{
+				"type": "string",
+			}),
+		),
+		mcp.WithArray("fleetUID",
+			mcp.Description("Optional array of fleet UIDs to filter events for devices in specific fleets. Example: ['fleet:00000000-0000-0000-0000-000000000001', 'fleet:00000000-0000-0000-0000-000000000002']"),
+			mcp.Items(map[string]any{
+				"type": "string",
+			}),
+		),
+		mcp.WithArray("sessionUID",
+			mcp.Description("Optional array of session UIDs to filter events for specific sessions. Example: ['00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002']"),
+			mcp.Items(map[string]any{
+				"type": "string",
+			}),
+		),
+		mcp.WithArray("eventUID",
+			mcp.Description("Optional array of event UIDs to get specific events. Example: ['00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002']"),
+			mcp.Items(map[string]any{
+				"type": "string",
+			}),
+		),
+		mcp.WithString("selectFields",
+			mcp.Description("Optional comma-separated list of fields to include in the response"),
 		),
 	)
 }
