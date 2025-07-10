@@ -1,0 +1,35 @@
+{
+  "dxt_version": "0.1",
+  "name": "Notecard",
+  "version": "0.0.1",
+  "description": "MCP server for managing and controlling Notecard",
+  "author": {
+    "name": "Blues Inc.",
+    "email": "support@blues.com"
+  },
+  "icon": "icon.png",
+  "homepage": "https://dev.blues.com",
+  "support": "https://discuss.blues.com",
+  "server": {
+    "type": "binary",
+    "entry_point": "notecard",
+    "mcp_config": {
+      "command": "${__dirname}/notecard",
+      "args": [],
+      "env": {}
+    }
+  },
+  "tools": [
+    {
+      "name": "notecardInitializeTool",
+      "description": "Initialize a connection to the Notecard for communication. This creates a notecard object that can be used for subsequent operations."
+    }
+  ],
+  "keywords": [
+    "notecard"
+  ],
+  "license": "MIT",
+  "compatibility": {
+    "platforms": []
+  }
+}

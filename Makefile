@@ -37,6 +37,29 @@ dev: ## Build the Dev MCP server
 	@echo "Building dev..."
 	cd $(DEV_DIR) && $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o dev
 
+# Build targets for each MCP server with DXT
+dxt: dxt-notecard dxt-notehub dxt-dev
+	@echo "✓ DXT build complete"
+
+# Generate DXT files
+dxt-notecard: notecard ## Generate DXT file for notecard
+	@echo "Generating DXT file for notecard..."
+	cp ./assets/icon.png $(NOTECARD_DIR)/icon.png
+	cd $(NOTECARD_DIR) && dxt pack
+	rm $(NOTECARD_DIR)/icon.png
+
+dxt-notehub: notehub ## Generate DXT file for notehub
+	@echo "Generating DXT file for notehub..."
+	cp ./assets/icon.png $(NOTEHUB_DIR)/icon.png
+	cd $(NOTEHUB_DIR) && dxt pack
+	rm $(NOTEHUB_DIR)/icon.png
+
+dxt-dev: dev ## Generate DXT file for dev
+	@echo "Generating DXT file for dev..."
+	cp ./assets/icon.png $(DEV_DIR)/icon.png
+	cd $(DEV_DIR) && dxt pack
+	rm $(DEV_DIR)/icon.png
+
 inspect-notecard: notecard ## Run MCP inspector for notecard
 	@echo "Starting MCP inspector for notecard..."
 	npx @modelcontextprotocol/inspector --config mcp.json --server notecard
@@ -84,6 +107,8 @@ clean: ## Clean build artifacts and generated docs
 	rm -f $(NOTECARD_DIR)/notecard
 	rm -f $(NOTEHUB_DIR)/notehub
 	rm -f $(DEV_DIR)/dev
+	find . -name "*.dxt" -type f -delete
+	rm -rf ./dist ./dxt
 	@rm -rf notehub/docs notecard/docs dev/docs
 	@echo "✓ Clean complete"
 

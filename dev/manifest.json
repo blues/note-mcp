@@ -1,0 +1,30 @@
+{
+  "dxt_version": "0.1",
+  "name": "Dev",
+  "version": "0.0.1",
+  "description": "MCP server for Notecard & Notehub development",
+  "author": {
+    "name": "Blues Inc.",
+    "email": "support@blues.com"
+  },
+  "icon": "icon.png",
+  "homepage": "https://dev.blues.com",
+  "support": "https://discuss.blues.com",
+  "server": {
+    "type": "binary",
+    "entry_point": "dev",
+    "mcp_config": {
+      "command": "${__dirname}/dev",
+      "args": [],
+      "env": {}
+    }
+  },
+  "keywords": [
+    "dev"
+  ],
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": []
+  },
+  "license": "MIT"
+}

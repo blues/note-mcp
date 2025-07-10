@@ -9,7 +9,7 @@ builds:
   -
     id: "notecard-mcp-linux"
     dir: notecard
-    binary: notecard-mcp
+    binary: "notecard_{{ .Os }}-{{ .Arch }}"
 
     env:
       - CGO_ENABLED=0
@@ -23,7 +23,7 @@ builds:
   -
     id: "notehub-mcp-linux"
     dir: notehub
-    binary: notehub-mcp
+    binary: "notehub_{{ .Os }}-{{ .Arch }}"
 
     env:
       - CGO_ENABLED=0
@@ -33,10 +33,25 @@ builds:
       - amd64
       - arm
       - arm64
+
+  -
+    id: "dev-mcp-linux"
+    dir: dev
+    binary: "dev_{{ .Os }}-{{ .Arch }}"
+
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm
+      - arm64
+
   -
     id: "notecard-mcp"
     dir: notecard
-    binary: notecard-mcp
+    binary: "notecard_{{ if eq .Os \"windows\" }}win32{{ else }}{{ .Os }}{{ end }}-{{ .Arch }}"
 
     env:
       - CGO_ENABLED=1
@@ -56,7 +71,27 @@ builds:
   -
     id: "notehub-mcp"
     dir: notehub
-    binary: notehub-mcp
+    binary: "notehub_{{ if eq .Os \"windows\" }}win32{{ else }}{{ .Os }}{{ end }}-{{ .Arch }}"
+
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm
+        goarm: 6
+      - goos: windows
+        goarch: arm64
+
+  -
+    id: "dev-mcp"
+    dir: dev
+    binary: "dev_{{ if eq .Os \"windows\" }}win32{{ else }}{{ .Os }}{{ end }}-{{ .Arch }}"
 
     env:
       - CGO_ENABLED=1
@@ -81,15 +116,3 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
-
-brews:
-  - repository:
-      owner: blues
-      name: homebrew-note-mcp
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    directory: Formula
-    homepage: https://blues.com
-    description: Note MCP servers
-    license: MIT
-    dependencies:
-      - name: note-cli

@@ -9,3 +9,5 @@ dist
 build/
 app/
 .DS_Store
+*.dxt
+dxt/

@@ -1,0 +1,29 @@
+{
+  "dxt_version": "0.1",
+  "name": "Notehub",
+  "version": "0.0.1",
+  "description": "MCP server for managing and controlling Notehub",
+  "author": {
+    "name": "Blues Inc.",
+    "email": "support@blues.com"
+  },
+  "icon": "icon.png",
+  "homepage": "https://dev.blues.com",
+  "support": "https://discuss.blues.com",
+  "server": {
+    "type": "binary",
+    "entry_point": "notehub",
+    "mcp_config": {
+      "command": "${__dirname}/notehub",
+      "args": [],
+      "env": {}
+    }
+  },
+  "keywords": [
+    "notehub"
+  ],
+  "license": "MIT",
+  "compatibility": {
+    "platforms": []
+  }
+}

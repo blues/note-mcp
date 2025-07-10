@@ -23,6 +23,17 @@ jobs:
         with:
           go-version: 1.21
       -
+        name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      -
+        name: Install DXT
+        run: npm install -g @anthropic-ai/dxt
+      -
+        name: Install jq
+        run: brew install jq
+      -
         name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -31,10 +42,14 @@ jobs:
           args: release -f .goreleaser.yaml --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+      -
+        name: Generate platform-specific DXT files
+        run: |
+          chmod +x ./generate_platform_dxt.sh
+          bash ./generate_platform_dxt.sh
       -
         name: Upload assets
         uses: actions/upload-artifact@v4
         with:
           name: note-mcp
-          path: dist/*
+          path: dxt/*
