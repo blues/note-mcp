@@ -14,12 +14,9 @@
                 ".env"
             ]
         },
-        "dev": {
-            "command": "dev/dev",
-            "args": [
-                "--env",
-                ".env"
-            ]
+        "blues-expert": {
+        "type": "http",
+        "url": "http://localhost:8080/mcp"
         }
     }
 }
