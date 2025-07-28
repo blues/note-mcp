@@ -2,9 +2,9 @@ name: audit
 
 on:
     push:
-      branches: [ master ]
+      branches: [ main ]
     pull_request:
-      branches: [ master ]
+      branches: [ main ]
 
 jobs:
   audit:
@@ -18,7 +18,7 @@ jobs:
         name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.18
+          go-version: 1.23
 
       -
         name: Verify dependencies

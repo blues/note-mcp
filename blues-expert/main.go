@@ -2,10 +2,9 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 
-	"note-mcp/dev/lib"
+	"note-mcp/blues-expert/lib"
 	"note-mcp/utils"
 
 	"github.com/joho/godotenv"
@@ -33,7 +32,7 @@ func main() {
 
 	// Create a new MCP server
 	s := server.NewMCPServer(
-		"Dev MCP",
+		"Blues Expert MCP",
 		utils.Commit,
 		server.WithToolCapabilities(true),
 		server.WithResourceCapabilities(true, true),
@@ -41,10 +40,11 @@ func main() {
 	)
 
 	// Create MCP logger
-	logger := utils.NewMCPLogger(s, "dev-mcp")
+	logger := utils.NewMCPLogger(s, "blues-expert-mcp")
 
 	// Send initial startup log
-	logger.Info("Dev MCP server starting up...")
+	log.Println("Blues Expert MCP server starting up...")
+	logger.Info("Blues Expert MCP server starting up...")
 
 	// Create resources using functions from resources.go
 	// APIResources := CreateAPIResources()
@@ -70,10 +70,11 @@ func main() {
 	s.AddTool(arduinoCLIUploadTool, lib.HandleArduinoCLIUploadTool(logger))
 	s.AddTool(arduinoSensorsTool, lib.HandleArduinoSensorsTool)
 
-	logger.Info("Dev MCP server ready with logging capabilities")
+	log.Println("Blues Expert MCP server ready with logging capabilities")
 
-	if err := server.ServeStdio(s); err != nil {
-		logger.Errorf("Server error: %v", err)
-		fmt.Printf("Server error: %v\n", err)
+	log.Println("Starting StreamableHTTP server on :8080/mcp")
+	httpServer := server.NewStreamableHTTPServer(s)
+	if err := httpServer.Start(":8080"); err != nil {
+		log.Fatal(err)
 	}
 }
