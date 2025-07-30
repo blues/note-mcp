@@ -4,8 +4,6 @@ notehub
 !notehub/
 blues-expert
 !blues-expert/
-dev
-!dev/
 .env
 dist
 build/
