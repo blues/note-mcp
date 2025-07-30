@@ -1,13 +1,13 @@
 # note-mcp
 
-MCP servers for Notecard, Notehub, and Development.
+MCP servers for Notecard, Notehub, and Blues Expert.
 
 > [!WARNING]
 > These MCP servers are experimental and subject to change. Please wait until a versioned release is available before relying on them.
 
 ## About
 
-This project is a collection of MCP servers for Notecard, Notehub, and Development.
+This project is a collection of MCP servers for Notecard, Notehub, and Blues Expert.
 
 ### Notecard (STDIO)
 
@@ -15,13 +15,17 @@ The Notecard MCP server is a local tool design to help you develop Notecard proj
 It provides a simple abstraction to Notecard (using the Notecard CLI), and can help you get started setting up and configuring your Notecards.
 This tool provides utilities to update firmware, connect your Notecards to WiFi networks, and more.
 
+#### Prerequisites
+
+- [Notecard CLI](https://github.com/blues/notecard-cli)
+
 ### Notehub (STDIO)
 
 The Notehub MCP server is a local tool design to help you develop Notehub projects.
 It provides a simple abstraction to Notehub (using the Notehub API), and can help you get started setting up and configuring your Notehub projects.
 This tool provides utilities to create and manage Notehub projects, view Note events,and to manage your Notehub devices.
 
-### Blues Expert (HTTP)
+### Blues Expert (Docker/HTTP)
 
 The Blues Expert MCP server is a remote tool design to help you develop Notecard projects.
 When used with an LLM, it can help to guide with best practices, for both writing code as well as leveraging Notecard's capabilities.
@@ -35,6 +39,12 @@ To build the MCP servers, you'll need to have the following tools installed:
 - Go (atleast v1.23)
 - Make
 
+Per MCP server, you'll need to have the following tools installed:
+
+- Notecard MCP: [Notecard CLI](https://github.com/blues/notecard-cli)
+- Notehub MCP: Notehub Account with API access
+- Blues Expert MCP: [Docker](https://www.docker.com/products/docker-desktop/)
+
 Then, run the following command:
 
 ```bash
@@ -47,7 +57,7 @@ Add the following to your `mcp.json` file, where `mcp.json` is the file that det
 
 ```json
 {
-"mcpServers": {
+  "mcpServers": {
     "notecard": {
       "type": "stdio",
       "command": "/YOUR/PATH/TO/note-mcp/notecard/notecard"
@@ -68,7 +78,7 @@ Add the following to your `mcp.json` file, where `mcp.json` is the file that det
 }
 ```
 
-The `.env` file should contain the following variables:
+The `.env` file for Notehub MCP should contain the following variables:
 
 ```bash
 NOTEHUB_USER="your_notehub_username"
@@ -93,8 +103,8 @@ For Notehub MCP:
 make inspect notehub
 ```
 
-For dev MCP:
+For Blues Expert MCP:
 
 ```bash
-make inspect dev
+make inspect blues-expert
 ```

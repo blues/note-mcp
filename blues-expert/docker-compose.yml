@@ -1,12 +1,11 @@
-version: '3.8'
-
 services:
-  dev-mcp:
+  mcp:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: blues-expert/Dockerfile
     ports:
-      - "8080:8080"
+      - "8081:8080"
+      - "2112:2112"  # Prometheus metrics endpoint
     environment:
       - GO_ENV=production
     # Optional: mount environment file if you have one
@@ -15,8 +14,60 @@ services:
     # command: ["./main", "-env", "/app/.env"]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health", "||", "exit", "1"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2112/metrics", "||", "exit", "1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: blues-expert-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./analytics/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9090/-/ready || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: blues-expert-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./analytics/provisioning:/etc/grafana/provisioning:ro
+    restart: unless-stopped
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:

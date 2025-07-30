@@ -69,11 +69,12 @@ func HandleArduinoCLICompileTool(logger *utils.MCPLogger) func(ctx context.Conte
 		}
 
 		// Check if the board is valid
-		if board == "Swan" {
+		switch board {
+		case "Swan":
 			board = "STMicroelectronics:stm32:Blues"
-		} else if board == "Cygnet" {
+		case "Cygnet":
 			board = "STMicroelectronics:stm32:Blues:pnum=CYGNET"
-		} else {
+		default:
 			return mcp.NewToolResultError(fmt.Sprintf("Invalid board: %s. Valid options are: Swan, Cygnet", board)), nil
 		}
 
@@ -120,11 +121,12 @@ func HandleArduinoCLIUploadTool(logger *utils.MCPLogger) func(ctx context.Contex
 		}
 		port := request.GetString("port", "")
 
-		if board == "Swan" {
+		switch board {
+		case "Swan":
 			board = "STMicroelectronics:stm32:Blues"
-		} else if board == "Cygnet" {
+		case "Cygnet":
 			board = "STMicroelectronics:stm32:Blues:pnum=CYGNET"
-		} else {
+		default:
 			return mcp.NewToolResultError(fmt.Sprintf("Invalid board type: %s. Valid options are: Swan, Cygnet", board)), nil
 		}
 

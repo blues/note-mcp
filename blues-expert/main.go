@@ -3,12 +3,15 @@ package main
 import (
 	"flag"
 	"log"
+	"net/http"
+	"os"
 
 	"note-mcp/blues-expert/lib"
 	"note-mcp/utils"
 
 	"github.com/joho/godotenv"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -62,19 +65,61 @@ func main() {
 	// 	s.AddResource(resource, HandleAPIResource)
 	// }
 
-	// Add tool handlers
-	s.AddTool(arduinoNotePowerManagementTool, lib.HandleArduinoNotePowerManagementTool)
-	s.AddTool(arduinoNoteBestPracticesTool, lib.HandleArduinoNoteBestPracticesTool)
-	s.AddTool(arduinoNoteTemplatesTool, lib.HandleArduinoNoteTemplatesTool)
-	s.AddTool(arduinoCLICompileTool, lib.HandleArduinoCLICompileTool(logger))
-	s.AddTool(arduinoCLIUploadTool, lib.HandleArduinoCLIUploadTool(logger))
-	s.AddTool(arduinoSensorsTool, lib.HandleArduinoSensorsTool)
+	// Add tool handlers with metrics instrumentation
+	s.AddTool(arduinoNotePowerManagementTool, lib.InstrumentToolHandler("arduino_note_power_management", lib.HandleArduinoNotePowerManagementTool))
+	s.AddTool(arduinoNoteBestPracticesTool, lib.InstrumentToolHandler("arduino_note_best_practices", lib.HandleArduinoNoteBestPracticesTool))
+	s.AddTool(arduinoNoteTemplatesTool, lib.InstrumentToolHandler("arduino_note_templates", lib.HandleArduinoNoteTemplatesTool))
+	s.AddTool(arduinoCLICompileTool, lib.InstrumentToolHandler("arduino_compile", lib.HandleArduinoCLICompileTool(logger)))
+	s.AddTool(arduinoCLIUploadTool, lib.InstrumentToolHandler("arduino_upload", lib.HandleArduinoCLIUploadTool(logger)))
+	s.AddTool(arduinoSensorsTool, lib.InstrumentToolHandler("arduino_sensors", lib.HandleArduinoSensorsTool))
 
 	log.Println("Blues Expert MCP server ready with logging capabilities")
 
-	log.Println("Starting StreamableHTTP server on :8080/mcp")
+	// Get port from environment variable (AppRunner provides this)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Default fallback for local development
+	}
+
+	// Create StreamableHTTPServer
 	httpServer := server.NewStreamableHTTPServer(s)
-	if err := httpServer.Start(":8080"); err != nil {
+
+	// Create a custom HTTP multiplexer to handle both MCP and additional endpoints
+	mux := http.NewServeMux()
+
+	// Health check endpoint
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	// Metrics & Logging endpoint
+	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/logs", lib.LogsHandler)
+	mux.HandleFunc("/logs/stream", lib.LogsStreamHandler)
+	mux.HandleFunc("/logs/stats", lib.LogsStatsHandler)
+
+	// Route all other requests to the MCP server
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" || r.URL.Path == "/metrics" ||
+			r.URL.Path == "/logs" || r.URL.Path == "/logs/stream" || r.URL.Path == "/logs/stats" {
+			return
+		}
+
+		httpServer.ServeHTTP(w, r)
+	})
+
+	log.Printf("Starting HTTP server on port %s", port)
+	log.Printf("MCP server available at /mcp")
+	log.Printf("Metrics available at /metrics")
+	log.Printf("Logs available at /logs")
+	log.Printf("Logs streaming (Loki) at /logs/stream")
+	log.Printf("Logs buffer stats at /logs/stats")
+	log.Printf("Health check at /health")
+
+	// Start HTTP server with our custom multiplexer
+	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatal(err)
 	}
 }

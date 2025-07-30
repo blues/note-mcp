@@ -2,6 +2,8 @@ notecard
 !notecard/
 notehub
 !notehub/
+blues-expert
+!blues-expert/
 dev
 !dev/
 .env
@@ -9,3 +11,4 @@ dist
 build/
 app/
 .DS_Store
+*.jsonl
