@@ -1,6 +1,6 @@
 # Makefile for note-mcp project
 
-.PHONY: all clean build test notecard notehub inspect inspect-notecard inspect-notehub help docs docs-notehub docs-notecard fmt vet develop
+.PHONY: all clean build test notecard notehub blues-expert inspect inspect-notecard inspect-notehub inspect-blues-expert help docs docs-notehub docs-notecard docs-blues-expert fmt vet develop
 
 # Go build flags
 GO=go

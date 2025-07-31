@@ -7,14 +7,14 @@ RUN apk add --no-cache git
 # Set working directory
 WORKDIR /app
 
-# Copy go mod files
-COPY go.mod go.sum ./
+# Copy go mod files from parent directory
+COPY ../go.mod ../go.sum ./
 
 # Download dependencies
 RUN go mod download
 
-# Copy source code
-COPY . .
+# Copy source code from parent directory
+COPY ../ .
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./blues-expert/
@@ -23,7 +23,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./blues-expe
 FROM alpine:latest
 
 # Install ca-certificates for HTTPS requests
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates wget
 
 # Create non-root user
 RUN adduser -D -s /bin/sh appuser
@@ -39,7 +39,7 @@ RUN chown -R appuser:appuser /app
 # Switch to non-root user
 USER appuser
 
-# Expose port 8080
+# Expose ports 8080 (MCP server)
 EXPOSE 8080
 
 # Run the binary
