@@ -94,16 +94,24 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
-	// Metrics & Logging endpoint
+	// Metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
-	mux.HandleFunc("/logs", lib.LogsHandler)
-	mux.HandleFunc("/logs/stream", lib.LogsStreamHandler)
-	mux.HandleFunc("/logs/stats", lib.LogsStatsHandler)
+
+	// Logging endpoints
+	loggingEnabled := os.Getenv("ENABLE_LOGGING_ENDPOINTS") != ""
+	if loggingEnabled {
+		mux.HandleFunc("/logs", lib.LogsHandler)
+		mux.HandleFunc("/logs/stream", lib.LogsStreamHandler)
+		mux.HandleFunc("/logs/stats", lib.LogsStatsHandler)
+	}
 
 	// Route all other requests to the MCP server
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/health" || r.URL.Path == "/metrics" ||
-			r.URL.Path == "/logs" || r.URL.Path == "/logs/stream" || r.URL.Path == "/logs/stats" {
+		if r.URL.Path == "/health" || r.URL.Path == "/metrics" {
+			return
+		}
+
+		if loggingEnabled && (r.URL.Path == "/logs" || r.URL.Path == "/logs/stream" || r.URL.Path == "/logs/stats") {
 			return
 		}
 
@@ -112,11 +120,16 @@ func main() {
 
 	log.Printf("Starting HTTP server on port %s", port)
 	log.Printf("MCP server available at /mcp")
-	log.Printf("Metrics available at /metrics")
-	log.Printf("Logs available at /logs")
-	log.Printf("Logs streaming (Loki) at /logs/stream")
-	log.Printf("Logs buffer stats at /logs/stats")
 	log.Printf("Health check at /health")
+	log.Printf("Metrics available at /metrics")
+
+	if loggingEnabled {
+		log.Printf("Logs available at /logs")
+		log.Printf("Logs streaming (Loki) at /logs/stream")
+		log.Printf("Logs buffer stats at /logs/stats")
+	} else {
+		log.Printf("Logging endpoints disabled (set ENABLE_LOGGING_ENDPOINTS to enable)")
+	}
 
 	// Start HTTP server with our custom multiplexer
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
