@@ -1,4 +1,4 @@
-name: audit
+name: Build and Audit Go Code
 
 on:
     push:
