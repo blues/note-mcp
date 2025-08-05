@@ -23,13 +23,11 @@ func init() {
 	flag.StringVar(&envFilePath, "env", "", "Path to .env file to load environment variables")
 }
 
-// withBasicAuth wraps an HTTP handler with basic authentication
 func withBasicAuth(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username := os.Getenv("LOGS_AUTH_USER")
 		password := os.Getenv("LOGS_AUTH_PASS")
 
-		// Skip auth if credentials are not configured
 		if username == "" || password == "" {
 			log.Printf("Warning: LOGS_AUTH_USER or LOGS_AUTH_PASS not set, logging endpoints are unprotected")
 			handler(w, r)
@@ -130,8 +128,10 @@ func main() {
 	// Metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
 
-	// Logging endpoints
-	loggingEnabled := os.Getenv("ENABLE_LOGGING_ENDPOINTS") != ""
+	// Logging endpoints - enabled if authentication credentials are provided
+	logsAuthUser := os.Getenv("LOGS_AUTH_USER")
+	logsAuthPass := os.Getenv("LOGS_AUTH_PASS")
+	loggingEnabled := logsAuthUser != "" && logsAuthPass != ""
 	if loggingEnabled {
 		mux.HandleFunc("/logs", withBasicAuth(lib.LogsHandler))
 		mux.HandleFunc("/logs/stream", withBasicAuth(lib.LogsStreamHandler))
@@ -160,9 +160,8 @@ func main() {
 		log.Printf("Logs available at /logs (requires basic auth)")
 		log.Printf("Logs streaming (Loki) at /logs/stream (requires basic auth)")
 		log.Printf("Logs buffer stats at /logs/stats (requires basic auth)")
-		log.Printf("Set LOGS_AUTH_USER and LOGS_AUTH_PASS environment variables for authentication")
 	} else {
-		log.Printf("Logging endpoints disabled (set ENABLE_LOGGING_ENDPOINTS to enable)")
+		log.Printf("Logging endpoints disabled (set credentials to enable)")
 	}
 
 	// Start HTTP server with our custom multiplexer
