@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/subtle"
 	"flag"
 	"log"
 	"net/http"
@@ -20,6 +21,38 @@ var (
 
 func init() {
 	flag.StringVar(&envFilePath, "env", "", "Path to .env file to load environment variables")
+}
+
+// withBasicAuth wraps an HTTP handler with basic authentication
+func withBasicAuth(handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		username := os.Getenv("LOGS_AUTH_USER")
+		password := os.Getenv("LOGS_AUTH_PASS")
+
+		// Skip auth if credentials are not configured
+		if username == "" || password == "" {
+			log.Printf("Warning: LOGS_AUTH_USER or LOGS_AUTH_PASS not set, logging endpoints are unprotected")
+			handler(w, r)
+			return
+		}
+
+		user, pass, ok := r.BasicAuth()
+		if !ok {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Logging Endpoints"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Use constant-time comparison to prevent timing attacks
+		if subtle.ConstantTimeCompare([]byte(user), []byte(username)) != 1 ||
+			subtle.ConstantTimeCompare([]byte(pass), []byte(password)) != 1 {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Logging Endpoints"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		handler(w, r)
+	}
 }
 
 func main() {
@@ -100,9 +133,9 @@ func main() {
 	// Logging endpoints
 	loggingEnabled := os.Getenv("ENABLE_LOGGING_ENDPOINTS") != ""
 	if loggingEnabled {
-		mux.HandleFunc("/logs", lib.LogsHandler)
-		mux.HandleFunc("/logs/stream", lib.LogsStreamHandler)
-		mux.HandleFunc("/logs/stats", lib.LogsStatsHandler)
+		mux.HandleFunc("/logs", withBasicAuth(lib.LogsHandler))
+		mux.HandleFunc("/logs/stream", withBasicAuth(lib.LogsStreamHandler))
+		mux.HandleFunc("/logs/stats", withBasicAuth(lib.LogsStatsHandler))
 	}
 
 	// Route all other requests to the MCP server
@@ -124,9 +157,10 @@ func main() {
 	log.Printf("Metrics available at /metrics")
 
 	if loggingEnabled {
-		log.Printf("Logs available at /logs")
-		log.Printf("Logs streaming (Loki) at /logs/stream")
-		log.Printf("Logs buffer stats at /logs/stats")
+		log.Printf("Logs available at /logs (requires basic auth)")
+		log.Printf("Logs streaming (Loki) at /logs/stream (requires basic auth)")
+		log.Printf("Logs buffer stats at /logs/stats (requires basic auth)")
+		log.Printf("Set LOGS_AUTH_USER and LOGS_AUTH_PASS environment variables for authentication")
 	} else {
 		log.Printf("Logging endpoints disabled (set ENABLE_LOGGING_ENDPOINTS to enable)")
 	}
