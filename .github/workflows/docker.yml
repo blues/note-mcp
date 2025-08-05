@@ -41,6 +41,7 @@ jobs:
           role-to-assume: arn:aws:iam::660644769541:role/blues-expert-mcp-github
           role-session-name: GitHubActions
           aws-region: us-east-1
+          audience: sts.amazonaws.com
 
       - name: Log in to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
