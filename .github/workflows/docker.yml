@@ -9,7 +9,9 @@ on:
 
 env:
   REGISTRY_GHCR: ghcr.io
-  IMAGE_NAME: blues-expert-mcp
+  IMAGE_NAME_GHCR: blues-expert-mcp
+  REGISTRY_ECR: 660644769541.dkr.ecr.us-east-1.amazonaws.com
+  IMAGE_NAME_ECR: /blues-dev/blues-expert-mcp
 
 jobs:
   build-and-push:
@@ -17,6 +19,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
 
     steps:
       - name: Checkout repository
@@ -32,12 +35,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::660644769541:role/blues-expert-mcp-github
+          role-session-name: GitHubActions
+          aws-region: us-east-1
+          audience: sts.amazonaws.com
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+            ${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_GHCR }}
+            ${{ env.REGISTRY_ECR }}${{ env.IMAGE_NAME_ECR }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
