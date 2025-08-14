@@ -3,10 +3,8 @@ package lib
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
-	"os"
-
-	"note-mcp/utils"
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -56,101 +54,49 @@ func HandleArduinoSensorsTool(ctx context.Context, request mcp.CallToolRequest) 
 	return mcp.NewToolResultText(string(content)), nil
 }
 
-func HandleArduinoCLICompileTool(logger *utils.MCPLogger) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		board := request.GetString("board", "Swan")
-		ino, err := request.RequireString("ino")
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Invalid Arduino sketch file: %v", err)), nil
-		}
-		outputDir, err := request.RequireString("output-dir")
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Invalid output directory: %v", err)), nil
-		}
-
-		// Check if the board is valid
-		switch board {
-		case "Swan":
-			board = "STMicroelectronics:stm32:Blues"
-		case "Cygnet":
-			board = "STMicroelectronics:stm32:Blues:pnum=CYGNET"
-		default:
-			return mcp.NewToolResultError(fmt.Sprintf("Invalid board: %s. Valid options are: Swan, Cygnet", board)), nil
-		}
-
-		// Check if the ino file exists
-		if _, err := os.Stat(ino); os.IsNotExist(err) {
-			return mcp.NewToolResultError(fmt.Sprintf("File not found: %s", ino)), nil
-		}
-
-		// Check if the output directory, if it doesn't exist, create it
-		if _, err := os.Stat(outputDir); os.IsNotExist(err) {
-			err = os.MkdirAll(outputDir, 0755)
-			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to create output directory: %v", err)), nil
-			}
-		}
-
-		// Set write permissions to the output directory
-		err = os.Chmod(outputDir, 0755)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to set write permissions to the output directory: %v", err)), nil
-		}
-
-		logger.Info("Compiling Arduino project...")
-		command := fmt.Sprintf("Command: arduino-cli compile --fqbn %s %s --output-dir %s --verbose", board, ino, outputDir)
-		logger.Info(command)
-
-		output, err := utils.ExecuteArduinoCLICommandWithLogger([]string{"compile", "--fqbn", board, ino, "--output-dir", outputDir, "--no-color"}, logger)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to build Arduino project: %v", err)), nil
-		}
-		return mcp.NewToolResultText(output), nil
+// HandleNotecardRequestValidateTool handles the notecard request validation tool
+func HandleNotecardRequestValidateTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	requestJSON, err := request.RequireString("request")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid request parameter: %v", err)), nil
 	}
+
+	// Parse the JSON request
+	var reqMap map[string]interface{}
+	if err := json.Unmarshal([]byte(requestJSON), &reqMap); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid JSON request: %v", err)), nil
+	}
+
+	// Validate the request using the validate.go function with default schema
+	if err := ValidateNotecardRequest(reqMap, ""); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Validation failed: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText("Request validation successful: The JSON request is valid according to the Notecard API schema."), nil
 }
 
-func HandleArduinoCLIUploadTool(logger *utils.MCPLogger) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		board, err := request.RequireString("board")
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Invalid board: %v", err)), nil
-		}
-		ino, err := request.RequireString("ino")
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Invalid Arduino sketch file: %v", err)), nil
-		}
-		port := request.GetString("port", "")
+// HandleNotecardGetAPIsTool handles the notecard API documentation tool
+func HandleNotecardGetAPIsTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	apiName := request.GetString("api", "")
 
-		switch board {
-		case "Swan":
-			board = "STMicroelectronics:stm32:Blues"
-		case "Cygnet":
-			board = "STMicroelectronics:stm32:Blues:pnum=CYGNET"
-		default:
-			return mcp.NewToolResultError(fmt.Sprintf("Invalid board type: %s. Valid options are: Swan, Cygnet", board)), nil
-		}
-
-		// Check if the ino file exists
-		if _, err := os.Stat(ino); os.IsNotExist(err) {
-			return mcp.NewToolResultError(fmt.Sprintf("File not found: %s", ino)), nil
-		}
-
-		if port != "" {
-			command := fmt.Sprintf("Command: arduino-cli upload --port %s --fqbn %s %s", port, board, ino)
-			logger.Info(command)
-			output, err := utils.ExecuteArduinoCLICommandWithLogger([]string{"upload", "--port", port, "--fqbn", board, ino, "--no-color"}, logger)
-			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to upload Arduino project: %v", err)), nil
-			}
-			return mcp.NewToolResultText(output), nil
-		} else {
-			command := fmt.Sprintf("Command: arduino-cli upload --fqbn %s %s", board, ino)
-			logger.Info(command)
-			output, err := utils.ExecuteArduinoCLICommandWithLogger([]string{"upload", "--fqbn", board, ino, "--no-color"}, logger)
-			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to upload Arduino project: %v", err)), nil
-			}
-			return mcp.NewToolResultText(output), nil
-		}
+	// Get API documentation
+	apiCategory, err := GetNotecardAPIs(apiName)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get API documentation: %v", err)), nil
 	}
+
+	var response []byte
+	// If specific API requested, return just the API object
+	if apiName != "" && len(apiCategory.APIs) > 0 {
+		response, err = json.MarshalIndent(apiCategory.APIs[0], "", "  ")
+	} else {
+		// Otherwise return the full category structure for listing
+		response, err = json.MarshalIndent(apiCategory, "", "  ")
+	}
+
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to format API documentation: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(string(response)), nil
 }

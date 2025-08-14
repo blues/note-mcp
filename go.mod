@@ -6,6 +6,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/mark3labs/mcp-go v0.34.0
 	github.com/prometheus/client_golang v1.20.5
+	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	golang.org/x/text v0.26.0
 )
 
