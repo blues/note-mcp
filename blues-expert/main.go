@@ -76,6 +76,9 @@ func main() {
 	// Create MCP logger
 	logger := utils.NewMCPLogger(s, "blues-expert-mcp")
 
+	// Set the global logger for schema operations
+	lib.SetGlobalLogger(logger)
+
 	// Send initial startup log
 	log.Println("Blues Expert MCP server starting up...")
 	logger.Info("Blues Expert MCP server starting up...")

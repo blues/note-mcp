@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"note-mcp/utils"
+
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	_ "github.com/santhosh-tekuri/jsonschema/v5/httploader" // Enable HTTP/HTTPS loading
 )
@@ -21,6 +23,10 @@ var (
 	schema     *jsonschema.Schema
 	schemaOnce sync.Once
 	schemaErr  error
+
+	// Global logger for schema operations
+	globalLogger *utils.MCPLogger
+	loggerMutex  sync.RWMutex
 )
 
 // cacheDir is the directory where schemas are stored
@@ -36,6 +42,24 @@ const cacheExpirationDuration = 24 * time.Hour
 type CacheMetadata struct {
 	FetchTime time.Time `json:"fetch_time"`
 	URL       string    `json:"url"`
+}
+
+// SetGlobalLogger sets the global logger instance for schema operations
+func SetGlobalLogger(logger *utils.MCPLogger) {
+	loggerMutex.Lock()
+	defer loggerMutex.Unlock()
+	globalLogger = logger
+}
+
+// logInfo sends an info log if logger is available
+func logInfo(message string) {
+	loggerMutex.RLock()
+	logger := globalLogger
+	loggerMutex.RUnlock()
+
+	if logger != nil {
+		logger.Info(message)
+	}
 }
 
 // extractRefs recursively extracts $ref URLs from a schema
@@ -61,11 +85,16 @@ func extractRefs(schemaMap map[string]interface{}, baseURL string) []string {
 
 // fetchAndCacheSchema fetches a schema from the URL and caches it
 func fetchAndCacheSchema(url string) (io.Reader, error) {
+	logInfo(fmt.Sprintf("Fetching Notecard API schema from %s...", url))
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch schema %s: %v", url, err)
 	}
 	defer resp.Body.Close()
+
+	logInfo("Schema download in progress, please wait...")
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch schema %s: status %d", url, resp.StatusCode)
 	}
@@ -73,15 +102,21 @@ func fetchAndCacheSchema(url string) (io.Reader, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read schema %s: %v", url, err)
 	}
+
+	logInfo("Processing and validating schema...")
+
 	// Verify it's valid JSON before caching
 	var v interface{}
 	if err := json.Unmarshal(data, &v); err != nil {
 		return nil, fmt.Errorf("invalid JSON schema %s: %v", url, err)
 	}
+
+	logInfo("Caching schema for future use...")
+
 	// Save to cache
 	cachePath := getCachePath(url)
 	fetchTime := time.Now()
-	if err := os.WriteFile(cachePath, data, 0644); err != nil {
+	if err := os.WriteFile(cachePath, data, 0600); err != nil {
 		// Log error but continue - don't fail if we can't cache
 		fmt.Fprintf(os.Stderr, "warning: failed to cache schema %s: %v\n", url, err)
 	} else {
@@ -90,6 +125,9 @@ func fetchAndCacheSchema(url string) (io.Reader, error) {
 			fmt.Fprintf(os.Stderr, "warning: failed to save cache metadata for %s: %v\n", url, err)
 		}
 	}
+
+	logInfo("Schema fetch and cache completed successfully")
+
 	return bytes.NewReader(data), nil
 }
 
@@ -176,7 +214,7 @@ func saveCacheMetadata(url string, fetchTime time.Time) error {
 		return fmt.Errorf("failed to marshal cache metadata: %v", err)
 	}
 
-	if err := os.WriteFile(metadataPath, data, 0644); err != nil {
+	if err := os.WriteFile(metadataPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write cache metadata: %v", err)
 	}
 
@@ -218,7 +256,7 @@ func initSchema(url string) error {
 		compiler.Draft = jsonschema.Draft2020
 
 		// Ensure cache directory exists
-		if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		if err := os.MkdirAll(cacheDir, 0700); err != nil {
 			schemaErr = fmt.Errorf("failed to create cache directory %s: %v", cacheDir, err)
 			return
 		}
@@ -246,7 +284,11 @@ func initSchema(url string) error {
 		}
 		// Extract and cache referenced schemas
 		refs := extractRefs(mainSchema, url)
-		for _, refURL := range refs {
+		if len(refs) > 0 {
+			logInfo(fmt.Sprintf("Processing %d referenced schema files...", len(refs)))
+		}
+		for i, refURL := range refs {
+			logInfo(fmt.Sprintf("Loading referenced schema %d/%d: %s", i+1, len(refs), filepath.Base(refURL)))
 			refReader, err := loadOrFetchSchema(refURL)
 			if err != nil {
 				schemaErr = fmt.Errorf("failed to load referenced schema %s: %v", refURL, err)
@@ -405,8 +447,29 @@ func GetNotecardAPIs(apiName string) (*APICategory, error) {
 		return nil, fmt.Errorf("failed to find cached schema files: %v", err)
 	}
 
+	// If no cache files found, force schema initialization to populate cache
 	if len(cacheFiles) == 0 {
-		return nil, fmt.Errorf("no cached schema files found - try validating a request first to populate cache")
+		logInfo("No cached API schema found, fetching fresh schema from remote...")
+
+		// Force a fresh fetch by temporarily clearing the schema cache
+		schemaOnce = sync.Once{}
+		schema = nil
+		schemaErr = nil
+
+		// Re-initialize schema which will populate the cache
+		if err := initSchema(defaultSchemaURL); err != nil {
+			return nil, fmt.Errorf("failed to fetch and initialize schema: %v", err)
+		}
+
+		// Try to find cache files again after initialization
+		cacheFiles, err = filepath.Glob(filepath.Join(cacheDir, "*.req.notecard.api.json"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to find cached schema files after initialization: %v", err)
+		}
+
+		if len(cacheFiles) == 0 {
+			return nil, fmt.Errorf("no API documentation found even after fetching fresh schema")
+		}
 	}
 
 	// If specific API requested, find and return just that API
@@ -415,7 +478,21 @@ func GetNotecardAPIs(apiName string) (*APICategory, error) {
 
 		// Check if the specific API schema file exists
 		if _, err := os.Stat(schemaFile); os.IsNotExist(err) {
-			return nil, fmt.Errorf("API '%s' not found. Available APIs can be listed by calling this tool without the 'api' parameter", apiName)
+			logInfo(fmt.Sprintf("API '%s' not found in cache, refreshing schema...", apiName))
+
+			// Try to refresh the cache in case the API was recently added
+			schemaOnce = sync.Once{}
+			schema = nil
+			schemaErr = nil
+
+			if err := initSchema(defaultSchemaURL); err != nil {
+				return nil, fmt.Errorf("failed to refresh schema for API '%s': %v", apiName, err)
+			}
+
+			// Check again after refresh
+			if _, err := os.Stat(schemaFile); os.IsNotExist(err) {
+				return nil, fmt.Errorf("API '%s' not found. Available APIs can be listed by calling this tool without the 'api' parameter", apiName)
+			}
 		}
 
 		// Load and parse the specific schema file
