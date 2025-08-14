@@ -20,9 +20,10 @@ import (
 
 // schema is a cached, compiled JSON schema
 var (
-	schema     *jsonschema.Schema
-	schemaOnce sync.Once
-	schemaErr  error
+	schema      *jsonschema.Schema
+	schemaOnce  sync.Once
+	schemaErr   error
+	schemaMutex sync.RWMutex
 
 	// Global logger for schema operations
 	globalLogger *utils.MCPLogger
@@ -60,6 +61,14 @@ func logInfo(message string) {
 	if logger != nil {
 		logger.Info(message)
 	}
+}
+
+// resetSchemaWithLock safely resets the schema state for re-initialization
+// This function must be called with schemaMutex write lock held
+func resetSchemaWithLock() {
+	schemaOnce = sync.Once{}
+	schema = nil
+	schemaErr = nil
 }
 
 // extractRefs recursively extracts $ref URLs from a schema
@@ -251,7 +260,21 @@ func isCacheExpired(url string) bool {
 
 // initSchema compiles the schema, using cached files if available
 func initSchema(url string) error {
+	schemaMutex.RLock()
+	currentSchema := schema
+	currentErr := schemaErr
+	schemaMutex.RUnlock()
+
+	// If schema is already initialized and no error, return early
+	if currentSchema != nil && currentErr == nil {
+		return nil
+	}
+
+	// Use sync.Once for initialization, but protect the state with mutex
 	schemaOnce.Do(func() {
+		schemaMutex.Lock()
+		defer schemaMutex.Unlock()
+
 		compiler := jsonschema.NewCompiler()
 		compiler.Draft = jsonschema.Draft2020
 
@@ -306,6 +329,9 @@ func initSchema(url string) error {
 			return
 		}
 	})
+
+	schemaMutex.RLock()
+	defer schemaMutex.RUnlock()
 	return schemaErr
 }
 
@@ -380,7 +406,16 @@ func ValidateNotecardRequest(reqMap map[string]interface{}, schemaURL string) er
 		return fmt.Errorf("failed to initialize schema: %v", err)
 	}
 
-	if err := schema.Validate(reqMap); err != nil {
+	// Use read lock to safely access schema for validation
+	schemaMutex.RLock()
+	currentSchema := schema
+	schemaMutex.RUnlock()
+
+	if currentSchema == nil {
+		return fmt.Errorf("schema not initialized")
+	}
+
+	if err := currentSchema.Validate(reqMap); err != nil {
 		return resolveSchemaError(reqMap)
 	}
 
@@ -451,10 +486,10 @@ func GetNotecardAPIs(apiName string) (*APICategory, error) {
 	if len(cacheFiles) == 0 {
 		logInfo("No cached API schema found, fetching fresh schema from remote...")
 
-		// Force a fresh fetch by temporarily clearing the schema cache
-		schemaOnce = sync.Once{}
-		schema = nil
-		schemaErr = nil
+		// Force a fresh fetch by safely resetting the schema cache
+		schemaMutex.Lock()
+		resetSchemaWithLock()
+		schemaMutex.Unlock()
 
 		// Re-initialize schema which will populate the cache
 		if err := initSchema(defaultSchemaURL); err != nil {
@@ -481,9 +516,9 @@ func GetNotecardAPIs(apiName string) (*APICategory, error) {
 			logInfo(fmt.Sprintf("API '%s' not found in cache, refreshing schema...", apiName))
 
 			// Try to refresh the cache in case the API was recently added
-			schemaOnce = sync.Once{}
-			schema = nil
-			schemaErr = nil
+			schemaMutex.Lock()
+			resetSchemaWithLock()
+			schemaMutex.Unlock()
 
 			if err := initSchema(defaultSchemaURL); err != nil {
 				return nil, fmt.Errorf("failed to refresh schema for API '%s': %v", apiName, err)
@@ -697,23 +732,4 @@ func extractAPIFromSchema(apiName string, schemaData map[string]interface{}) *AP
 	}
 
 	return entry
-}
-
-// Helper functions
-func getCategoryDescription(category string) string {
-	descriptions := map[string]string{
-		"card": "Card-level operations including status, version, and configuration",
-		"hub":  "Hub connectivity and synchronization operations",
-		"note": "Note management for sending and receiving data",
-		"env":  "Environment variable management",
-		"file": "File operations for binary data transfer",
-		"web":  "Web request operations",
-		"var":  "Variable management operations",
-		"ntn":  "Non-Terrestrial Network communication",
-		"dfu":  "Device firmware update operations",
-	}
-	if desc, exists := descriptions[category]; exists {
-		return desc
-	}
-	return fmt.Sprintf("APIs in the %s category", category)
 }
