@@ -1,0 +1,642 @@
+package lib
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/santhosh-tekuri/jsonschema/v5"
+	_ "github.com/santhosh-tekuri/jsonschema/v5/httploader" // Enable HTTP/HTTPS loading
+)
+
+// schema is a cached, compiled JSON schema
+var (
+	schema     *jsonschema.Schema
+	schemaOnce sync.Once
+	schemaErr  error
+)
+
+// cacheDir is the directory where schemas are stored
+const cacheDir = "/tmp/notecard-schema/"
+
+// Default Notecard API schema URL
+const defaultSchemaURL = "https://raw.githubusercontent.com/blues/notecard-schema/master/notecard.api.json"
+
+// Cache expiration duration (24 hours)
+const cacheExpirationDuration = 24 * time.Hour
+
+// CacheMetadata represents metadata for cached schema files
+type CacheMetadata struct {
+	FetchTime time.Time `json:"fetch_time"`
+	URL       string    `json:"url"`
+}
+
+// extractRefs recursively extracts $ref URLs from a schema
+func extractRefs(schemaMap map[string]interface{}, baseURL string) []string {
+	var refs []string
+	if ref, ok := schemaMap["$ref"].(string); ok && strings.HasPrefix(ref, "http") {
+		refs = append(refs, ref)
+	}
+	for _, v := range schemaMap {
+		switch v := v.(type) {
+		case map[string]interface{}:
+			refs = append(refs, extractRefs(v, baseURL)...)
+		case []interface{}:
+			for _, item := range v {
+				if m, ok := item.(map[string]interface{}); ok {
+					refs = append(refs, extractRefs(m, baseURL)...)
+				}
+			}
+		}
+	}
+	return refs
+}
+
+// fetchAndCacheSchema fetches a schema from the URL and caches it
+func fetchAndCacheSchema(url string) (io.Reader, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch schema %s: %v", url, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch schema %s: status %d", url, resp.StatusCode)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read schema %s: %v", url, err)
+	}
+	// Verify it's valid JSON before caching
+	var v interface{}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return nil, fmt.Errorf("invalid JSON schema %s: %v", url, err)
+	}
+	// Save to cache
+	cachePath := getCachePath(url)
+	fetchTime := time.Now()
+	if err := os.WriteFile(cachePath, data, 0644); err != nil {
+		// Log error but continue - don't fail if we can't cache
+		fmt.Fprintf(os.Stderr, "warning: failed to cache schema %s: %v\n", url, err)
+	} else {
+		// Save cache metadata
+		if err := saveCacheMetadata(url, fetchTime); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to save cache metadata for %s: %v\n", url, err)
+		}
+	}
+	return bytes.NewReader(data), nil
+}
+
+// formatErrorMessage formats jsonschema validation errors into user-friendly messages
+func formatErrorMessage(reqType string, errUnformatted error) (err error) {
+	if errUnformatted == nil {
+		return nil
+	}
+
+	// Convert the error to a string
+	errMsg := errUnformatted.Error()
+
+	// Define constants
+	const prefix = "jsonschema: '"
+	const mid1 = "' does not validate with "
+	const mid2 = ": "
+
+	// Check if message starts with prefix
+	if !strings.HasPrefix(errMsg, prefix) {
+		return fmt.Errorf("invalid error message format")
+	}
+
+	// Remove prefix and split on mid1
+	rest := strings.TrimPrefix(errMsg, prefix)
+	parts := strings.SplitN(rest, mid1, 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid error message format")
+	}
+
+	// Extract property and remaining part
+	property := parts[0]
+	if len(property) > 0 {
+		// As of jsonschema v5.3.1, a forward-slash is prefixed to the
+		// property name. Remove it to improve readability.
+		// Workaround for issue:
+		// https://github.com/santhosh-tekuri/jsonschema/issues/220
+		property = parts[0][1:]
+	}
+	remaining := parts[1]
+
+	// Split remaining part on mid2
+	finalParts := strings.SplitN(remaining, mid2, 2)
+	if len(finalParts) != 2 {
+		return fmt.Errorf("invalid error message format")
+	}
+
+	// Extract schema rule and error message
+	// schemaRule := finalParts[0] // Not used in output, but available if needed
+	errorMessage := finalParts[1]
+
+	if len(property) > 0 {
+		err = fmt.Errorf("'%s' is not valid for %s: %s", property, reqType, errorMessage)
+	} else {
+		err = fmt.Errorf("for '%s' %s", reqType, errorMessage)
+	}
+
+	// Return the formatted error
+	return err
+}
+
+// getCachePath converts a URL to a safe file path in the cache directory
+func getCachePath(url string) string {
+	// Use the URL path as the filename, replacing invalid characters
+	filename := strings.ReplaceAll(filepath.Base(url), string(os.PathSeparator), "_")
+	return filepath.Join(cacheDir, filename)
+}
+
+// getCacheMetadataPath returns the metadata file path for a cached schema
+func getCacheMetadataPath(url string) string {
+	cachePath := getCachePath(url)
+	return cachePath + ".meta"
+}
+
+// saveCacheMetadata saves metadata for a cached schema file
+func saveCacheMetadata(url string, fetchTime time.Time) error {
+	metadata := CacheMetadata{
+		FetchTime: fetchTime,
+		URL:       url,
+	}
+
+	metadataPath := getCacheMetadataPath(url)
+	data, err := json.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal cache metadata: %v", err)
+	}
+
+	if err := os.WriteFile(metadataPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write cache metadata: %v", err)
+	}
+
+	return nil
+}
+
+// loadCacheMetadata loads metadata for a cached schema file
+func loadCacheMetadata(url string) (*CacheMetadata, error) {
+	metadataPath := getCacheMetadataPath(url)
+
+	data, err := os.ReadFile(metadataPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cache metadata: %v", err)
+	}
+
+	var metadata CacheMetadata
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal cache metadata: %v", err)
+	}
+
+	return &metadata, nil
+}
+
+// isCacheExpired checks if a cached schema has expired
+func isCacheExpired(url string) bool {
+	metadata, err := loadCacheMetadata(url)
+	if err != nil {
+		// If we can't load metadata, consider it expired to force refresh
+		return true
+	}
+
+	return time.Since(metadata.FetchTime) > cacheExpirationDuration
+}
+
+// initSchema compiles the schema, using cached files if available
+func initSchema(url string) error {
+	schemaOnce.Do(func() {
+		compiler := jsonschema.NewCompiler()
+		compiler.Draft = jsonschema.Draft2020
+
+		// Ensure cache directory exists
+		if err := os.MkdirAll(cacheDir, 0755); err != nil {
+			schemaErr = fmt.Errorf("failed to create cache directory %s: %v", cacheDir, err)
+			return
+		}
+
+		mainSchemaReader, err := loadOrFetchSchema(url)
+		if err != nil {
+			schemaErr = fmt.Errorf("failed to load main schema %s: %v", url, err)
+			return
+		}
+		// Read main schema to extract $ref URLs
+		mainSchemaData, err := io.ReadAll(mainSchemaReader)
+		if err != nil {
+			schemaErr = fmt.Errorf("failed to read main schema %s: %v", url, err)
+			return
+		}
+		var mainSchema map[string]interface{}
+		if err := json.Unmarshal(mainSchemaData, &mainSchema); err != nil {
+			schemaErr = fmt.Errorf("failed to parse main schema %s: %v", url, err)
+			return
+		}
+		// Add main schema resource
+		if err := compiler.AddResource(url, bytes.NewReader(mainSchemaData)); err != nil {
+			schemaErr = fmt.Errorf("failed to add main schema resource %s: %v", url, err)
+			return
+		}
+		// Extract and cache referenced schemas
+		refs := extractRefs(mainSchema, url)
+		for _, refURL := range refs {
+			refReader, err := loadOrFetchSchema(refURL)
+			if err != nil {
+				schemaErr = fmt.Errorf("failed to load referenced schema %s: %v", refURL, err)
+				return
+			}
+			if err := compiler.AddResource(refURL, refReader); err != nil {
+				schemaErr = fmt.Errorf("failed to add referenced schema resource %s: %v", refURL, err)
+				return
+			}
+		}
+
+		schema, err = compiler.Compile(url)
+		if err != nil {
+			schemaErr = fmt.Errorf("failed to compile schema %s: %v", url, err)
+			return
+		}
+	})
+	return schemaErr
+}
+
+// loadOrFetchSchema loads a schema from cache or fetches it from the URL, caching the result
+func loadOrFetchSchema(url string) (io.Reader, error) {
+	cachePath := getCachePath(url)
+
+	// Check if cache exists and is not expired
+	if file, err := os.Open(cachePath); err == nil {
+		defer file.Close()
+
+		// Check if cache has expired
+		if isCacheExpired(url) {
+			// Cache expired: fetch fresh copy
+			return fetchAndCacheSchema(url)
+		}
+
+		data, err := io.ReadAll(file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read cached schema %s: %v", cachePath, err)
+		}
+		// Verify it's valid JSON
+		var v interface{}
+		if err := json.Unmarshal(data, &v); err != nil {
+			// Invalid cache: proceed to fetch
+			return fetchAndCacheSchema(url)
+		}
+		return bytes.NewReader(data), nil
+	}
+	// Cache miss: fetch from URL
+	return fetchAndCacheSchema(url)
+}
+
+// resolveSchemaError attempts to validate against specific request schemas for better error messages
+func resolveSchemaError(reqMap map[string]interface{}) (err error) {
+	reqType := reqMap["req"]
+	if reqType == nil {
+		reqType = reqMap["cmd"]
+	}
+	reqTypeStr, ok := reqType.(string)
+	if !ok {
+		err = fmt.Errorf("request type not a string")
+	} else if reqTypeStr == "" {
+		err = fmt.Errorf("no request type specified")
+	} else {
+		// Validate against the specific request schema
+		schemaPath := filepath.Join(cacheDir, reqTypeStr+".req.notecard.api.json")
+		if _, err = os.Stat(schemaPath); os.IsNotExist(err) {
+			err = fmt.Errorf("unknown request type: %s", reqTypeStr)
+		} else if err == nil {
+			var reqSchema *jsonschema.Schema
+			reqSchema, err = jsonschema.Compile(schemaPath)
+			if err == nil {
+				err = reqSchema.Validate(reqMap)
+				if err != nil {
+					err = formatErrorMessage(reqTypeStr, err)
+				}
+			}
+		}
+	}
+
+	return err
+}
+
+// ValidateNotecardRequest validates a Notecard API request against the schema
+func ValidateNotecardRequest(reqMap map[string]interface{}, schemaURL string) error {
+	if schemaURL == "" {
+		schemaURL = defaultSchemaURL
+	}
+
+	if err := initSchema(schemaURL); err != nil {
+		return fmt.Errorf("failed to initialize schema: %v", err)
+	}
+
+	if err := schema.Validate(reqMap); err != nil {
+		return resolveSchemaError(reqMap)
+	}
+
+	return nil
+}
+
+// APICategory represents a category of Notecard APIs
+type APICategory struct {
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	APIs        []APIEntry `json:"apis"`
+}
+
+// APIEntry represents a single API endpoint
+type APIEntry struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Annotation  string                 `json:"annotation,omitempty"`
+	Properties  map[string]APIProperty `json:"properties,omitempty"`
+	Required    []string               `json:"required,omitempty"`
+	Examples    []string               `json:"examples,omitempty"`
+	Samples     []APISample            `json:"samples,omitempty"`
+	SKUs        []string               `json:"skus,omitempty"`
+	Version     string                 `json:"version,omitempty"`
+	APIVersion  string                 `json:"api_version,omitempty"`
+}
+
+// APISample represents a sample usage from the schema
+type APISample struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	JSON        string `json:"json"`
+}
+
+// APIProperty represents a property of an API
+type APIProperty struct {
+	Type            string                   `json:"type"`
+	Description     string                   `json:"description"`
+	Default         interface{}              `json:"default,omitempty"`
+	Enum            []string                 `json:"enum,omitempty"`
+	Minimum         *float64                 `json:"minimum,omitempty"`
+	Maximum         *float64                 `json:"maximum,omitempty"`
+	SKUs            []string                 `json:"skus,omitempty"`
+	SubDescriptions []PropertySubDescription `json:"sub_descriptions,omitempty"`
+}
+
+// PropertySubDescription represents detailed descriptions for specific property values
+type PropertySubDescription struct {
+	Const       string   `json:"const"`
+	Description string   `json:"description"`
+	SKUs        []string `json:"skus,omitempty"`
+}
+
+// GetNotecardAPIs returns API documentation for a specific API or lists available APIs
+func GetNotecardAPIs(apiName string) (*APICategory, error) {
+	// Ensure schema is initialized
+	if err := initSchema(defaultSchemaURL); err != nil {
+		return nil, fmt.Errorf("failed to initialize schema: %v", err)
+	}
+
+	// Load cached schema files to extract API documentation
+	cacheFiles, err := filepath.Glob(filepath.Join(cacheDir, "*.req.notecard.api.json"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to find cached schema files: %v", err)
+	}
+
+	if len(cacheFiles) == 0 {
+		return nil, fmt.Errorf("no cached schema files found - try validating a request first to populate cache")
+	}
+
+	// If specific API requested, find and return just that API
+	if apiName != "" {
+		schemaFile := filepath.Join(cacheDir, apiName+".req.notecard.api.json")
+
+		// Check if the specific API schema file exists
+		if _, err := os.Stat(schemaFile); os.IsNotExist(err) {
+			return nil, fmt.Errorf("API '%s' not found. Available APIs can be listed by calling this tool without the 'api' parameter", apiName)
+		}
+
+		// Load and parse the specific schema file
+		data, err := os.ReadFile(schemaFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read schema for API '%s': %v", apiName, err)
+		}
+
+		var schemaData map[string]interface{}
+		if err := json.Unmarshal(data, &schemaData); err != nil {
+			return nil, fmt.Errorf("failed to parse schema for API '%s': %v", apiName, err)
+		}
+
+		// Extract API documentation from schema
+		apiEntry := extractAPIFromSchema(apiName, schemaData)
+		if apiEntry == nil {
+			return nil, fmt.Errorf("failed to extract documentation for API '%s'", apiName)
+		}
+
+		// Return the API entry directly, not wrapped in a category
+		return &APICategory{
+			Name:        apiEntry.Name,
+			Description: apiEntry.Description,
+			APIs:        []APIEntry{*apiEntry},
+		}, nil
+	}
+
+	// No specific API requested - return list of available APIs
+	var allAPIs []APIEntry
+
+	for _, file := range cacheFiles {
+		// Extract API name from filename (e.g., "card.version.req.notecard.api.json" -> "card.version")
+		filename := filepath.Base(file)
+		extractedAPIName := strings.TrimSuffix(filename, ".req.notecard.api.json")
+
+		allAPIs = append(allAPIs, APIEntry{
+			Name:        extractedAPIName,
+			Description: fmt.Sprintf("Use this tool with api='%s' to get detailed documentation", extractedAPIName),
+		})
+	}
+
+	if len(allAPIs) == 0 {
+		return nil, fmt.Errorf("no API documentation found in cache")
+	}
+
+	return &APICategory{
+		Name:        "available_apis",
+		Description: fmt.Sprintf("Found %d available Notecard APIs. Use the 'api' parameter with any of these names to get detailed documentation.", len(allAPIs)),
+		APIs:        allAPIs,
+	}, nil
+}
+
+// extractAPIFromSchema extracts API documentation from a JSON schema
+func extractAPIFromSchema(apiName string, schemaData map[string]interface{}) *APIEntry {
+	entry := &APIEntry{
+		Name:       apiName,
+		Properties: make(map[string]APIProperty),
+	}
+
+	// Extract description
+	if desc, ok := schemaData["description"].(string); ok {
+		entry.Description = desc
+	}
+
+	// Extract annotation from annotations array
+	if annotations, ok := schemaData["annotations"].([]interface{}); ok {
+		if len(annotations) > 0 {
+			if annotationObj, ok := annotations[0].(map[string]interface{}); ok {
+				if desc, ok := annotationObj["description"].(string); ok {
+					entry.Annotation = desc
+				}
+			}
+		}
+	}
+
+	// Extract root-level SKUs
+	if skus, ok := schemaData["skus"].([]interface{}); ok {
+		for _, sku := range skus {
+			if s, ok := sku.(string); ok {
+				entry.SKUs = append(entry.SKUs, s)
+			}
+		}
+	}
+
+	// Extract version information
+	if version, ok := schemaData["version"].(string); ok {
+		entry.Version = version
+	}
+	if apiVersion, ok := schemaData["apiVersion"].(string); ok {
+		entry.APIVersion = apiVersion
+	}
+
+	// Extract properties (excluding implicit req/cmd properties)
+	if props, ok := schemaData["properties"].(map[string]interface{}); ok {
+		for propName, propData := range props {
+			// Skip implicit req/cmd properties as they're always required and match the API name
+			if propName == "req" || propName == "cmd" {
+				continue
+			}
+
+			if propMap, ok := propData.(map[string]interface{}); ok {
+				property := APIProperty{}
+
+				if propType, ok := propMap["type"].(string); ok {
+					property.Type = propType
+				}
+				if propDesc, ok := propMap["description"].(string); ok {
+					property.Description = propDesc
+				}
+				if propDefault, ok := propMap["default"]; ok {
+					property.Default = propDefault
+				}
+				if propEnum, ok := propMap["enum"].([]interface{}); ok {
+					for _, e := range propEnum {
+						if s, ok := e.(string); ok {
+							property.Enum = append(property.Enum, s)
+						}
+					}
+				}
+				if propMin, ok := propMap["minimum"].(float64); ok {
+					property.Minimum = &propMin
+				}
+				if propMax, ok := propMap["maximum"].(float64); ok {
+					property.Maximum = &propMax
+				}
+				// Extract property-level SKUs
+				if propSKUs, ok := propMap["skus"].([]interface{}); ok {
+					for _, sku := range propSKUs {
+						if s, ok := sku.(string); ok {
+							property.SKUs = append(property.SKUs, s)
+						}
+					}
+				}
+				if subDescs, ok := propMap["sub-descriptions"].([]interface{}); ok {
+					for _, subDescInterface := range subDescs {
+						if subDescMap, ok := subDescInterface.(map[string]interface{}); ok {
+							subDesc := PropertySubDescription{}
+
+							if constVal, ok := subDescMap["const"].(string); ok {
+								subDesc.Const = constVal
+							}
+							if desc, ok := subDescMap["description"].(string); ok {
+								subDesc.Description = desc
+							}
+							if skusInterface, ok := subDescMap["skus"].([]interface{}); ok {
+								for _, skuInterface := range skusInterface {
+									if sku, ok := skuInterface.(string); ok {
+										subDesc.SKUs = append(subDesc.SKUs, sku)
+									}
+								}
+							}
+
+							property.SubDescriptions = append(property.SubDescriptions, subDesc)
+						}
+					}
+				}
+
+				entry.Properties[propName] = property
+			}
+		}
+	}
+
+	// Extract required fields (excluding implicit req/cmd properties)
+	if required, ok := schemaData["required"].([]interface{}); ok {
+		for _, req := range required {
+			if s, ok := req.(string); ok {
+				// Skip implicit req/cmd properties as they're always required
+				if s == "req" || s == "cmd" {
+					continue
+				}
+				entry.Required = append(entry.Required, s)
+			}
+		}
+	}
+
+	// Extract samples if available
+	if samples, ok := schemaData["samples"].([]interface{}); ok {
+		for _, sampleInterface := range samples {
+			if sampleMap, ok := sampleInterface.(map[string]interface{}); ok {
+				sample := APISample{}
+
+				if title, ok := sampleMap["title"].(string); ok {
+					sample.Title = title
+				}
+				if desc, ok := sampleMap["description"].(string); ok {
+					sample.Description = desc
+				}
+				if jsonStr, ok := sampleMap["json"].(string); ok {
+					sample.JSON = jsonStr
+				}
+
+				entry.Samples = append(entry.Samples, sample)
+			}
+		}
+	}
+
+	// Add basic example usage if no samples were found
+	if len(entry.Samples) == 0 {
+		entry.Examples = []string{
+			fmt.Sprintf(`{"req":"%s"}`, apiName),
+		}
+	}
+
+	return entry
+}
+
+// Helper functions
+func getCategoryDescription(category string) string {
+	descriptions := map[string]string{
+		"card": "Card-level operations including status, version, and configuration",
+		"hub":  "Hub connectivity and synchronization operations",
+		"note": "Note management for sending and receiving data",
+		"env":  "Environment variable management",
+		"file": "File operations for binary data transfer",
+		"web":  "Web request operations",
+		"var":  "Variable management operations",
+		"ntn":  "Non-Terrestrial Network communication",
+		"dfu":  "Device firmware update operations",
+	}
+	if desc, exists := descriptions[category]; exists {
+		return desc
+	}
+	return fmt.Sprintf("APIs in the %s category", category)
+}

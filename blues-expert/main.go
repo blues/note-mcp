@@ -87,9 +87,9 @@ func main() {
 	arduinoNotePowerManagementTool := CreateArduinoNotePowerManagementTool()
 	arduinoNoteBestPracticesTool := CreateArduinoNoteBestPracticesTool()
 	arduinoNoteTemplatesTool := CreateArduinoNoteTemplatesTool()
-	arduinoCLICompileTool := CreateArduinoCLICompileTool()
-	arduinoCLIUploadTool := CreateArduinoCLIUploadTool()
 	arduinoSensorsTool := CreateArduinoSensorsTool()
+	notecardRequestValidateTool := CreateNotecardRequestValidateTool()
+	notecardGetAPIsTool := CreateNotecardGetAPIsTool()
 
 	// Add Docs API resources with their handlers
 	// for _, resource := range APIResources {
@@ -100,9 +100,9 @@ func main() {
 	s.AddTool(arduinoNotePowerManagementTool, lib.InstrumentToolHandler("arduino_note_power_management", lib.HandleArduinoNotePowerManagementTool))
 	s.AddTool(arduinoNoteBestPracticesTool, lib.InstrumentToolHandler("arduino_note_best_practices", lib.HandleArduinoNoteBestPracticesTool))
 	s.AddTool(arduinoNoteTemplatesTool, lib.InstrumentToolHandler("arduino_note_templates", lib.HandleArduinoNoteTemplatesTool))
-	s.AddTool(arduinoCLICompileTool, lib.InstrumentToolHandler("arduino_compile", lib.HandleArduinoCLICompileTool(logger)))
-	s.AddTool(arduinoCLIUploadTool, lib.InstrumentToolHandler("arduino_upload", lib.HandleArduinoCLIUploadTool(logger)))
 	s.AddTool(arduinoSensorsTool, lib.InstrumentToolHandler("arduino_sensors", lib.HandleArduinoSensorsTool))
+	s.AddTool(notecardRequestValidateTool, lib.InstrumentToolHandler("notecard_request_validate", lib.HandleNotecardRequestValidateTool))
+	s.AddTool(notecardGetAPIsTool, lib.InstrumentToolHandler("notecard_get_apis", lib.HandleNotecardGetAPIsTool))
 
 	log.Println("Blues Expert MCP server ready with logging capabilities")
 
