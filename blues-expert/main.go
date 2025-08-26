@@ -122,47 +122,44 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Health check endpoint
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/expert/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
 
 	// Metrics endpoint
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/expert/metrics", promhttp.Handler())
 
 	// Logging endpoints - enabled if authentication credentials are provided
 	logsAuthUser := os.Getenv("LOGS_AUTH_USER")
 	logsAuthPass := os.Getenv("LOGS_AUTH_PASS")
 	loggingEnabled := logsAuthUser != "" && logsAuthPass != ""
 	if loggingEnabled {
-		mux.HandleFunc("/logs", withBasicAuth(lib.LogsHandler))
-		mux.HandleFunc("/logs/stream", withBasicAuth(lib.LogsStreamHandler))
-		mux.HandleFunc("/logs/stats", withBasicAuth(lib.LogsStatsHandler))
+		mux.HandleFunc("/expert/logs", withBasicAuth(lib.LogsHandler))
+		mux.HandleFunc("/expert/logs/stream", withBasicAuth(lib.LogsStreamHandler))
+		mux.HandleFunc("/expert/logs/stats", withBasicAuth(lib.LogsStatsHandler))
 	}
 
-	// Route all other requests to the MCP server
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/health" || r.URL.Path == "/metrics" {
-			return
+	// Route all other /expert requests to the MCP server
+	mux.HandleFunc("/expert/", func(w http.ResponseWriter, r *http.Request) {
+		// Strip the /expert prefix before passing to the MCP server
+		r.URL.Path = r.URL.Path[7:] // Remove "/expert" (7 characters)
+		if r.URL.Path == "" {
+			r.URL.Path = "/"
 		}
-
-		if loggingEnabled && (r.URL.Path == "/logs" || r.URL.Path == "/logs/stream" || r.URL.Path == "/logs/stats") {
-			return
-		}
-
 		httpServer.ServeHTTP(w, r)
 	})
 
 	log.Printf("Starting HTTP server on port %s", port)
-	log.Printf("MCP server available at /mcp")
-	log.Printf("Health check at /health")
-	log.Printf("Metrics available at /metrics")
+	log.Printf("MCP server available at /expert/")
+	log.Printf("Health check at /expert/health")
+	log.Printf("Metrics available at /expert/metrics")
 
 	if loggingEnabled {
-		log.Printf("Logs available at /logs (requires basic auth)")
-		log.Printf("Logs streaming (Loki) at /logs/stream (requires basic auth)")
-		log.Printf("Logs buffer stats at /logs/stats (requires basic auth)")
+		log.Printf("Logs available at /expert/logs (requires basic auth)")
+		log.Printf("Logs streaming (Loki) at /expert/logs/stream (requires basic auth)")
+		log.Printf("Logs buffer stats at /expert/logs/stats (requires basic auth)")
 	} else {
 		log.Printf("Logging endpoints disabled (set credentials to enable)")
 	}
