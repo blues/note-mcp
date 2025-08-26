@@ -141,13 +141,9 @@ func main() {
 		mux.HandleFunc("/expert/logs/stats", withBasicAuth(lib.LogsStatsHandler))
 	}
 
-	// Route all other /expert requests to the MCP server
+	// Route MCP server requests to /expert/ path - preserve the prefix
 	mux.HandleFunc("/expert/", func(w http.ResponseWriter, r *http.Request) {
-		// Strip the /expert prefix before passing to the MCP server
-		r.URL.Path = r.URL.Path[7:] // Remove "/expert" (7 characters)
-		if r.URL.Path == "" {
-			r.URL.Path = "/"
-		}
+		// Ensure the MCP server sees the full path including /expert prefix
 		httpServer.ServeHTTP(w, r)
 	})
 

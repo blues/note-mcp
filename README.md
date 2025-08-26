@@ -72,7 +72,7 @@ Add the following to your `mcp.json` file, where `mcp.json` is the file that det
     },
     "blues-expert": {
       "type": "http",
-      "url": "http://localhost:8080/mcp"
+      "url": "http://localhost:8080/expert/mcp"
     }
   },
 }
