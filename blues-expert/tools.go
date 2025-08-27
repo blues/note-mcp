@@ -48,3 +48,26 @@ func CreateNotecardGetAPIsTool() mcp.Tool {
 		),
 	)
 }
+
+func CreateNotecardSearchTool() mcp.Tool {
+	return mcp.NewTool("notecard_search",
+		mcp.WithDescription("Search the Blues documentation for answers to questions about the Notecard, cellular connectivity, GPS, power management, and other Blues-specific topics."),
+		mcp.WithString("query",
+			mcp.Required(),
+			mcp.Description("The search query or question to find relevant documentation (e.g., 'How can I use cellular and gps at the same time?', 'Notecard power consumption', 'Troubleshooting connectivity issues')"),
+		),
+	)
+}
+
+func CreateNotecardSearchExpertTool() mcp.Tool {
+	return mcp.NewTool("notecard_search_expert",
+		mcp.WithDescription("Search the Blues documentation and get expert analysis from an AI Notecard specialist with deep knowledge of IoT product development and embedded systems design. This tool provides more comprehensive, contextual answers than basic search. This tool REQUIRES the client to support Sampling, use `notecard_search` if Sampling is not supported."),
+		mcp.WithString("query",
+			mcp.Required(),
+			mcp.Description("The search query or technical question about Notecard, IoT development, or embedded systems (e.g., 'How can I optimize power consumption for a solar-powered sensor?', 'Best practices for cellular connectivity in remote locations')"),
+		),
+		mcp.WithString("context",
+			mcp.Description("Optional additional context about your specific use case, hardware setup, or constraints to help the expert provide more targeted advice"),
+		),
+	)
+}

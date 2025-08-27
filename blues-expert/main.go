@@ -73,6 +73,9 @@ func main() {
 		server.WithRecovery(),
 	)
 
+	// Enable sampling capability
+	s.EnableSampling()
+
 	// Create MCP logger
 	logger := utils.NewMCPLogger(s, "blues-expert-mcp")
 
@@ -93,6 +96,8 @@ func main() {
 	arduinoSensorsTool := CreateArduinoSensorsTool()
 	notecardRequestValidateTool := CreateNotecardRequestValidateTool()
 	notecardGetAPIsTool := CreateNotecardGetAPIsTool()
+	notecardSearchTool := CreateNotecardSearchTool()
+	notecardSearchExpertTool := CreateNotecardSearchExpertTool()
 
 	// Add Docs API resources with their handlers
 	// for _, resource := range APIResources {
@@ -106,6 +111,8 @@ func main() {
 	s.AddTool(arduinoSensorsTool, lib.InstrumentToolHandler("arduino_sensors", lib.HandleArduinoSensorsTool))
 	s.AddTool(notecardRequestValidateTool, lib.InstrumentToolHandler("notecard_request_validate", lib.HandleNotecardRequestValidateTool))
 	s.AddTool(notecardGetAPIsTool, lib.InstrumentToolHandler("notecard_get_apis", lib.HandleNotecardGetAPIsTool))
+	s.AddTool(notecardSearchTool, lib.InstrumentToolHandler("notecard_search", lib.HandleNotecardSearchTool))
+	s.AddTool(notecardSearchExpertTool, lib.InstrumentToolHandler("notecard_search_expert", lib.HandleNotecardSearchExpertTool))
 
 	log.Println("Blues Expert MCP server ready with logging capabilities")
 
