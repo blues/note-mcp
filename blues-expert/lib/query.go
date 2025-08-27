@@ -51,7 +51,18 @@ func getAPIKeyFromAWS(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("secret string is nil")
 	}
 
-	return *result.SecretString, nil
+	// Parse JSON to extract the API key
+	var secretData map[string]string
+	if err := json.Unmarshal([]byte(*result.SecretString), &secretData); err != nil {
+		return "", fmt.Errorf("failed to parse secret JSON: %w", err)
+	}
+
+	apiKey, exists := secretData["BLUES_DOCS_API_KEY"]
+	if !exists {
+		return "", fmt.Errorf("BLUES_DOCS_API_KEY not found in secret")
+	}
+
+	return apiKey, nil
 }
 
 // SearchResult represents a single search result from the API
