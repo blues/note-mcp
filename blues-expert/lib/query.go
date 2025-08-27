@@ -7,11 +7,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -19,6 +21,38 @@ const (
 	// BluesDocsAPIBaseURL is the base URL for the Blues documentation search API
 	BluesDocsAPIBaseURL = "https://ragpi.blues.tools/sources/blues-docs/search"
 )
+
+// getAPIKeyFromAWS retrieves the API key from AWS Secrets Manager
+func getAPIKeyFromAWS(ctx context.Context) (string, error) {
+	secretName := "blues_expert_mcp_rag_pi_key"
+	region := "us-east-1"
+
+	// Load AWS configuration
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
+	if err != nil {
+		return "", fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	// Create Secrets Manager client
+	svc := secretsmanager.NewFromConfig(cfg)
+
+	input := &secretsmanager.GetSecretValueInput{
+		SecretId:     aws.String(secretName),
+		VersionStage: aws.String("AWSCURRENT"), // VersionStage defaults to AWSCURRENT if unspecified
+	}
+
+	result, err := svc.GetSecretValue(ctx, input)
+	if err != nil {
+		return "", fmt.Errorf("failed to get secret value: %w", err)
+	}
+
+	// Decrypts secret using the associated KMS key
+	if result.SecretString == nil {
+		return "", fmt.Errorf("secret string is nil")
+	}
+
+	return *result.SecretString, nil
+}
 
 // SearchResult represents a single search result from the API
 type SearchResult struct {
@@ -57,10 +91,10 @@ func SearchNotecardDocs(ctx context.Context, query string) (*mcp.CallToolResult,
 	// Add headers
 	req.Header.Set("Content-Type", "application/json")
 
-	// Get API key from environment variable
-	apiKey := os.Getenv("BLUES_DOCS_API_KEY")
-	if apiKey == "" {
-		return mcp.NewToolResultError("BLUES_DOCS_API_KEY environment variable is not set"), nil
+	// Get API key from AWS Secrets Manager
+	apiKey, err := getAPIKeyFromAWS(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve API key: %v", err)), nil
 	}
 	req.Header.Set("x-api-key", apiKey)
 
