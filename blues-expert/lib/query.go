@@ -58,9 +58,9 @@ func SearchNotecardDocs(ctx context.Context, query string) (*mcp.CallToolResult,
 	req.Header.Set("Content-Type", "application/json")
 
 	// Get API key from environment variable
-	apiKey := os.Getenv("blues_expert_mcp_rag_pi_key")
+	apiKey := os.Getenv("BLUES_DOCS_API_KEY")
 	if apiKey == "" {
-		return mcp.NewToolResultError("blues_expert_mcp_rag_pi_key environment variable is not set"), nil
+		return mcp.NewToolResultError("BLUES_DOCS_API_KEY environment variable is not set"), nil
 	}
 	req.Header.Set("x-api-key", apiKey)
 
