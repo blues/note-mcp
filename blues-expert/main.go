@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/subtle"
 	"flag"
 	"log"
 	"net/http"
@@ -11,8 +10,7 @@ import (
 	"note-mcp/utils"
 
 	"github.com/joho/godotenv"
-	"github.com/mark3labs/mcp-go/server"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 var (
@@ -23,41 +21,12 @@ func init() {
 	flag.StringVar(&envFilePath, "env", "", "Path to .env file to load environment variables")
 }
 
-func withBasicAuth(handler http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		username := os.Getenv("LOGS_AUTH_USER")
-		password := os.Getenv("LOGS_AUTH_PASS")
-
-		if username == "" || password == "" {
-			log.Printf("Warning: LOGS_AUTH_USER or LOGS_AUTH_PASS not set, logging endpoints are unprotected")
-			handler(w, r)
-			return
-		}
-
-		user, pass, ok := r.BasicAuth()
-		if !ok {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Logging Endpoints"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		// Use constant-time comparison to prevent timing attacks
-		if subtle.ConstantTimeCompare([]byte(user), []byte(username)) != 1 ||
-			subtle.ConstantTimeCompare([]byte(pass), []byte(password)) != 1 {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Logging Endpoints"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		handler(w, r)
-	}
-}
-
 func main() {
 	flag.Parse()
 
 	// Load environment variables from .env file if specified
 	if envFilePath != "" {
+		log.Printf("Loading environment variables from %s", envFilePath)
 		err := godotenv.Load(envFilePath)
 		if err != nil {
 			log.Printf("Warning: Failed to load .env file '%s': %v", envFilePath, err)
@@ -65,56 +34,29 @@ func main() {
 	}
 
 	// Create a new MCP server
-	s := server.NewMCPServer(
-		"Blues Expert MCP",
-		utils.Commit,
-		server.WithToolCapabilities(true),
-		server.WithResourceCapabilities(true, true),
-		server.WithRecovery(),
-	)
-
-	// Enable sampling capability
-	s.EnableSampling()
-
-	// Create MCP logger
-	logger := utils.NewMCPLogger(s, "blues-expert-mcp")
-
-	// Set the global logger for schema operations
-	lib.SetGlobalLogger(logger)
+	impl := &mcp.Implementation{Name: "Blues Expert MCP", Version: utils.Commit}
+	opts := &mcp.ServerOptions{
+		Instructions: "This MCP server provides expert guidance on using the Blues Notecard & Notehub. When using this tool for developing firmware, use the 'firmware_entrypoint' tool to get started. Otherwise, use the 'docs_search' or 'docs_search_expert' tool to search the Blues documentation.",
+		HasTools:     true,
+	}
+	s := mcp.NewServer(impl, opts)
 
 	// Send initial startup log
-	log.Println("Blues Expert MCP server starting up...")
-	logger.Info("Blues Expert MCP server starting up...")
-
-	// Create resources using functions from resources.go
-	// APIResources := CreateAPIResources()
+	log.Println("Blues Expert MCP server starting...")
 
 	// Add tools
-	arduinoNotePowerManagementTool := CreateArduinoNotePowerManagementTool()
-	arduinoNoteBestPracticesTool := CreateArduinoNoteBestPracticesTool()
-	arduinoNoteTemplatesTool := CreateArduinoNoteTemplatesTool()
-	arduinoSensorsTool := CreateArduinoSensorsTool()
-	notecardRequestValidateTool := CreateNotecardRequestValidateTool()
-	notecardGetAPIsTool := CreateNotecardGetAPIsTool()
-	notecardSearchTool := CreateNotecardSearchTool()
-	notecardSearchExpertTool := CreateNotecardSearchExpertTool()
+	firmwareEntrypointTool := CreateFirmwareEntrypointTool()
+	apiValidateTool := CreateAPIValidateTool()
+	apiDocsTool := CreateAPIDocsTool()
+	docsSearchTool := CreateDocsSearchTool()
+	docsSearchExpertTool := CreateDocsSearchExpertTool()
 
-	// Add Docs API resources with their handlers
-	// for _, resource := range APIResources {
-	// 	s.AddResource(resource, HandleAPIResource)
-	// }
-
-	// Add tool handlers with metrics instrumentation
-	s.AddTool(arduinoNotePowerManagementTool, lib.InstrumentToolHandler("arduino_note_power_management", lib.HandleArduinoNotePowerManagementTool))
-	s.AddTool(arduinoNoteBestPracticesTool, lib.InstrumentToolHandler("arduino_note_best_practices", lib.HandleArduinoNoteBestPracticesTool))
-	s.AddTool(arduinoNoteTemplatesTool, lib.InstrumentToolHandler("arduino_note_templates", lib.HandleArduinoNoteTemplatesTool))
-	s.AddTool(arduinoSensorsTool, lib.InstrumentToolHandler("arduino_sensors", lib.HandleArduinoSensorsTool))
-	s.AddTool(notecardRequestValidateTool, lib.InstrumentToolHandler("notecard_request_validate", lib.HandleNotecardRequestValidateTool))
-	s.AddTool(notecardGetAPIsTool, lib.InstrumentToolHandler("notecard_get_apis", lib.HandleNotecardGetAPIsTool))
-	s.AddTool(notecardSearchTool, lib.InstrumentToolHandler("notecard_search", lib.HandleNotecardSearchTool))
-	s.AddTool(notecardSearchExpertTool, lib.InstrumentToolHandler("notecard_search_expert", lib.HandleNotecardSearchExpertTool))
-
-	log.Println("Blues Expert MCP server ready with logging capabilities")
+	// Add tool handlers
+	mcp.AddTool(s, firmwareEntrypointTool, lib.HandleFirmwareEntrypointTool)
+	mcp.AddTool(s, apiValidateTool, lib.HandleAPIValidateTool)
+	mcp.AddTool(s, apiDocsTool, lib.HandleAPIDocsTool)
+	mcp.AddTool(s, docsSearchTool, lib.HandleDocsSearchTool)
+	mcp.AddTool(s, docsSearchExpertTool, lib.HandleDocsSearchExpertTool)
 
 	// Get port from environment variable (AppRunner provides this)
 	port := os.Getenv("PORT")
@@ -122,50 +64,29 @@ func main() {
 		port = "8080" // Default fallback for local development
 	}
 
-	// Create StreamableHTTPServer
-	httpServer := server.NewStreamableHTTPServer(s)
-
 	// Create a custom HTTP multiplexer to handle both MCP and additional endpoints
 	mux := http.NewServeMux()
 
-	// Health check endpoint
+	// Health check endpoint (AWS)
 	mux.HandleFunc("/expert/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
 
-	// Metrics endpoint
-	mux.Handle("/expert/metrics", promhttp.Handler())
+	// Create StreamableHTTPHandler for MCP requests
+	httpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+		return s
+	}, nil)
 
-	// Logging endpoints - enabled if authentication credentials are provided
-	logsAuthUser := os.Getenv("LOGS_AUTH_USER")
-	logsAuthPass := os.Getenv("LOGS_AUTH_PASS")
-	loggingEnabled := logsAuthUser != "" && logsAuthPass != ""
-	if loggingEnabled {
-		mux.HandleFunc("/expert/logs", withBasicAuth(lib.LogsHandler))
-		mux.HandleFunc("/expert/logs/stream", withBasicAuth(lib.LogsStreamHandler))
-		mux.HandleFunc("/expert/logs/stats", withBasicAuth(lib.LogsStatsHandler))
-	}
-
-	// Route MCP server requests to /expert/ path - preserve the prefix
+	// Route MCP server requests to /expert/ path
 	mux.HandleFunc("/expert/", func(w http.ResponseWriter, r *http.Request) {
-		// Ensure the MCP server sees the full path including /expert prefix
-		httpServer.ServeHTTP(w, r)
+		httpHandler.ServeHTTP(w, r)
 	})
 
 	log.Printf("Starting HTTP server on port %s", port)
 	log.Printf("MCP server available at /expert/")
 	log.Printf("Health check at /expert/health")
-	log.Printf("Metrics available at /expert/metrics")
-
-	if loggingEnabled {
-		log.Printf("Logs available at /expert/logs (requires basic auth)")
-		log.Printf("Logs streaming (Loki) at /expert/logs/stream (requires basic auth)")
-		log.Printf("Logs buffer stats at /expert/logs/stats (requires basic auth)")
-	} else {
-		log.Printf("Logging endpoints disabled (set credentials to enable)")
-	}
 
 	// Start HTTP server with our custom multiplexer
 	if err := http.ListenAndServe(":"+port, mux); err != nil {

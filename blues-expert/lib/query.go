@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -14,7 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
@@ -75,7 +76,7 @@ type SearchResult struct {
 }
 
 // SearchNotecardDocs performs a search against the Blues documentation API
-func SearchNotecardDocs(ctx context.Context, query string) (*mcp.CallToolResult, error) {
+func SearchNotecardDocs(ctx context.Context, request *mcp.CallToolRequest, query string) (*mcp.CallToolResult, error) {
 
 	// Create HTTP client with timeout
 	client := &http.Client{
@@ -85,7 +86,12 @@ func SearchNotecardDocs(ctx context.Context, query string) (*mcp.CallToolResult,
 	// Build the search URL
 	searchURL, err := url.Parse(BluesDocsAPIBaseURL)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to parse search URL: %v", err)), nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Failed to parse search URL: %v", err)},
+			},
+			IsError: true,
+		}, nil
 	}
 
 	// Add query parameter
@@ -96,47 +102,100 @@ func SearchNotecardDocs(ctx context.Context, query string) (*mcp.CallToolResult,
 	// Create request
 	req, err := http.NewRequestWithContext(ctx, "GET", searchURL.String(), nil)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to create request: %v", err)), nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Failed to create request: %v", err)},
+			},
+			IsError: true,
+		}, nil
 	}
 
 	// Add headers
 	req.Header.Set("Content-Type", "application/json")
 
-	// Get API key from AWS Secrets Manager
-	apiKey, err := getAPIKeyFromAWS(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve API key: %v", err)), nil
+	// Get API key from AWS Secrets Manager or use Environment Variable
+	if os.Getenv("BLUES_DOCS_API_KEY") != "" {
+		req.Header.Set("x-api-key", os.Getenv("BLUES_DOCS_API_KEY"))
+	} else {
+		// Log that we're fetching API key from AWS
+		if request != nil && request.Session != nil {
+			request.Session.Log(ctx, &mcp.LoggingMessageParams{
+				Level: "info",
+				Data:  "Retrieving API key from AWS Secrets Manager...",
+			})
+		}
+
+		apiKey, err := getAPIKeyFromAWS(ctx)
+		if err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					&mcp.TextContent{Text: fmt.Sprintf("Failed to retrieve API key: %v", err)},
+				},
+				IsError: true,
+			}, nil
+		}
+		req.Header.Set("x-api-key", apiKey)
 	}
-	req.Header.Set("x-api-key", apiKey)
+
+	// Log that we're making the search request
+	if request != nil && request.Session != nil {
+		request.Session.Log(ctx, &mcp.LoggingMessageParams{
+			Level: "info",
+			Data:  fmt.Sprintf("Searching Blues documentation for: %s", query),
+		})
+	}
 
 	// Make the request
 	resp, err := client.Do(req)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to make search request: %v", err)), nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Failed to make search request: %v", err)},
+			},
+			IsError: true,
+		}, nil
 	}
 	defer resp.Body.Close()
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
-		return mcp.NewToolResultError(fmt.Sprintf("Search API returned status %d", resp.StatusCode)), nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Search API returned status %d", resp.StatusCode)},
+			},
+			IsError: true,
+		}, nil
 	}
 
 	// Read response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to read response body: %v", err)), nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Failed to read response body: %v", err)},
+			},
+			IsError: true,
+		}, nil
 	}
 
 	// Parse JSON response as array of SearchResult
 	var searchResults []SearchResult
 	if err := json.Unmarshal(body, &searchResults); err != nil {
 		// If JSON parsing fails, return raw response
-		return mcp.NewToolResultText(fmt.Sprintf("Search Results for '%s':\n\n%s", query, string(body))), nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Search Results for '%s':\n\n%s", query, string(body))},
+			},
+		}, nil
 	}
 
 	// Format the response
 	if len(searchResults) == 0 {
-		return mcp.NewToolResultText(fmt.Sprintf("No results found for query: '%s'", query)), nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("No results found for query: '%s'", query)},
+			},
+		}, nil
 	}
 
 	// Build formatted response
@@ -154,9 +213,16 @@ func SearchNotecardDocs(ctx context.Context, query string) (*mcp.CallToolResult,
 		if i < len(searchResults)-1 {
 			result += "---\n\n"
 		}
+
+		result += "\n\nCheck that the query is related to the response of the search. If not, the answer may not be available in the documentation. Suggest to the user to post a question on the Blues Discourse forum, https://discuss.blues.com/."
+
 	}
 
-	return mcp.NewToolResultText(result), nil
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result},
+		},
+	}, nil
 }
 
 // cleanContent cleans up and formats the content from search results
