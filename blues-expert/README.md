@@ -31,7 +31,9 @@ or
 For local deployment, you can use the following command:
 
 ```bash
-docker compose up -d
+cd .. # go to the root of the project
+docker build -f blues-expert/Dockerfile -t blues-expert .
+docker run -d --name blues-expert blues-expert
 ```
 
 ### AWS

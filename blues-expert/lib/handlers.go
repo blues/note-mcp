@@ -5,91 +5,106 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"time"
+	"strings"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-//go:embed docs/arduino/power_management.md
-var powerManagementFS embed.FS
-
-func HandleArduinoNotePowerManagementTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	content, err := powerManagementFS.ReadFile("docs/arduino/power_management.md")
-	if err != nil {
-		return nil, err
-	}
-	return mcp.NewToolResultText(string(content)), nil
+// FirmwareEntrypointArgs defines the arguments for the firmware entrypoint tool
+type FirmwareEntrypointArgs struct {
+	Sdk string `json:"sdk" jsonschema:"The sdk to use for the firmware project. Must be one of: Arduino, C, Zephyr, Python"`
 }
 
-//go:embed docs/arduino/best_practices.md
-var bestPracticesFS embed.FS
-
-func HandleArduinoNoteBestPracticesTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	content, err := bestPracticesFS.ReadFile("docs/arduino/best_practices.md")
-	if err != nil {
-		return nil, err
-	}
-	return mcp.NewToolResultText(string(content)), nil
+// RequestValidateArgs defines the arguments for the notecard request validation tool
+type RequestValidateArgs struct {
+	Request string `json:"request" jsonschema:"The JSON string of the request to validate (e.g., '{\"req\":\"card.version\"}', '{\"req\":\"card.temp\",\"minutes\":60}')"`
 }
 
-//go:embed docs/arduino/templates.md
-var templatesFS embed.FS
-
-// HandleArduinoNoteTemplatesTool handles the arduino note templates tool
-func HandleArduinoNoteTemplatesTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	content, err := templatesFS.ReadFile("docs/arduino/templates.md")
-	if err != nil {
-		return nil, err
-	}
-	return mcp.NewToolResultText(string(content)), nil
+// GetAPIsArgs defines the arguments for the notecard API documentation tool
+type GetAPIsArgs struct {
+	API string `json:"api,omitempty" jsonschema:"The specific Notecard API to get documentation for (e.g., 'card.attn', 'card.version', 'hub.status', 'note.add')"`
 }
 
-//go:embed docs/arduino/sensors.md
-var sensorsFS embed.FS
-
-func HandleArduinoSensorsTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	content, err := sensorsFS.ReadFile("docs/arduino/sensors.md")
-	if err != nil {
-		return nil, err
-	}
-	return mcp.NewToolResultText(string(content)), nil
+// SearchArgs defines the arguments for the notecard search tool
+type SearchArgs struct {
+	Query string `json:"query" jsonschema:"The search query or question to find relevant documentation (e.g., 'How can I use cellular and gps at the same time?', 'Notecard power consumption', 'Troubleshooting connectivity issues')"`
 }
 
-// HandleNotecardRequestValidateTool handles the notecard request validation tool
-func HandleNotecardRequestValidateTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	requestJSON, err := request.RequireString("request")
+// SearchExpertArgs defines the arguments for the expert notecard search tool
+type SearchExpertArgs struct {
+	Query   string `json:"query" jsonschema:"The search query or technical question about Notecard, IoT development, or embedded systems (e.g., 'How can I optimize power consumption for a solar-powered sensor?', 'Best practices for cellular connectivity in remote locations')"`
+	Context string `json:"context,omitempty" jsonschema:"Optional additional context about your specific use case, hardware setup, or constraints to help the expert provide more targeted advice"`
+}
+
+//go:embed docs
+var docs embed.FS
+
+// Firmware Tools
+func HandleFirmwareEntrypointTool(ctx context.Context, request *mcp.CallToolRequest, args FirmwareEntrypointArgs) (*mcp.CallToolResult, any, error) {
+	// Get the SDK & Index file - convert to lowercase for directory name
+	sdk := strings.ToLower(args.Sdk)
+	indexFile := fmt.Sprintf("docs/%s/index.md", sdk)
+
+	// Get the docs
+	docContent, err := docs.ReadFile(indexFile)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Invalid request parameter: %v", err)), nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Error reading docs: %v", err)},
+			},
+		}, nil, nil
 	}
 
-	// Parse the JSON request
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(docContent)},
+		},
+	}, nil, nil
+}
+
+// Notecard API Tools
+func HandleAPIValidateTool(ctx context.Context, request *mcp.CallToolRequest, args RequestValidateArgs) (*mcp.CallToolResult, any, error) {
 	var reqMap map[string]interface{}
-	if err := json.Unmarshal([]byte(requestJSON), &reqMap); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Invalid JSON request: %v", err)), nil
+	if err := json.Unmarshal([]byte(args.Request), &reqMap); err != nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Invalid JSON request: %v", err)},
+			},
+			IsError: true,
+		}, nil, nil
 	}
 
-	// Validate the request using the validate.go function with default schema
 	if err := ValidateNotecardRequest(reqMap, ""); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Validation failed: %v", err)), nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Validation failed: %v", err)},
+			},
+			IsError: true,
+		}, nil, nil
 	}
 
-	return mcp.NewToolResultText("Request validation successful: The JSON request is valid according to the Notecard API schema."), nil
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: "Request validation successful: The JSON request is valid according to the Notecard API schema."},
+		},
+	}, nil, nil
 }
 
-// HandleNotecardGetAPIsTool handles the notecard API documentation tool
-func HandleNotecardGetAPIsTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	apiName := request.GetString("api", "")
-
+func HandleAPIDocsTool(ctx context.Context, request *mcp.CallToolRequest, args GetAPIsArgs) (*mcp.CallToolResult, any, error) {
 	// Get API documentation
-	apiCategory, err := GetNotecardAPIs(apiName)
+	apiCategory, err := GetNotecardAPIs(ctx, request, args.API)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to get API documentation: %v", err)), nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Failed to get API documentation: %v", err)},
+			},
+			IsError: true,
+		}, nil, nil
 	}
 
 	var response []byte
 	// If specific API requested, return just the API object
-	if apiName != "" && len(apiCategory.APIs) > 0 {
+	if args.API != "" && len(apiCategory.APIs) > 0 {
 		response, err = json.MarshalIndent(apiCategory.APIs[0], "", "  ")
 	} else {
 		// Otherwise return the full category structure for listing
@@ -97,47 +112,58 @@ func HandleNotecardGetAPIsTool(ctx context.Context, request mcp.CallToolRequest)
 	}
 
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to format API documentation: %v", err)), nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Failed to format API documentation: %v", err)},
+			},
+			IsError: true,
+		}, nil, nil
 	}
 
-	return mcp.NewToolResultText(string(response)), nil
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(response)},
+		},
+	}, nil, nil
 }
 
-// HandleNotecardSearchTool handles the notecard documentation search tool
-func HandleNotecardSearchTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	query, err := request.RequireString("query")
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Invalid query parameter: %v", err)), nil
-	}
-
+// Blues Documentation Tools
+func HandleDocsSearchTool(ctx context.Context, request *mcp.CallToolRequest, args SearchArgs) (*mcp.CallToolResult, any, error) {
 	// Call the search implementation from query.go
-	return SearchNotecardDocs(ctx, query)
-}
-
-// HandleNotecardSearchExpertTool handles the expert notecard search tool with AI sampling
-func HandleNotecardSearchExpertTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	query, err := request.RequireString("query")
+	result, err := SearchNotecardDocs(ctx, request, args.Query)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Invalid query parameter: %v", err)), nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Search error: %v", err)},
+			},
+			IsError: true,
+		}, nil, nil
 	}
 
-	userContext := request.GetString("context", "")
+	return result, nil, nil
+}
 
+func HandleDocsSearchExpertTool(ctx context.Context, request *mcp.CallToolRequest, args SearchExpertArgs) (*mcp.CallToolResult, any, error) {
 	// First, get the raw search results
-	searchResult, err := SearchNotecardDocs(ctx, query)
+	searchResult, err := SearchNotecardDocs(ctx, request, args.Query)
 	if err != nil {
-		return searchResult, err
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Search error: %v", err)},
+			},
+			IsError: true,
+		}, nil, nil
 	}
 
 	// Check if search returned an error
 	if searchResult.IsError {
-		return searchResult, nil
+		return searchResult, nil, nil
 	}
 
 	// Extract the search results text
 	var searchText string
 	if len(searchResult.Content) > 0 {
-		if textContent, ok := searchResult.Content[0].(mcp.TextContent); ok {
+		if textContent, ok := searchResult.Content[0].(*mcp.TextContent); ok {
 			searchText = textContent.Text
 		} else {
 			searchText = fmt.Sprintf("%v", searchResult.Content[0])
@@ -167,7 +193,7 @@ Be concise but comprehensive. Provide specific code examples, configuration reco
 
 	// Build the user prompt with search results and context
 	var userPrompt string
-	if userContext != "" {
+	if args.Context != "" {
 		userPrompt = fmt.Sprintf(`Question: %s
 
 Additional Context: %s
@@ -176,7 +202,7 @@ Based on the following search results from Blues documentation, provide expert a
 
 %s
 
-Please provide a comprehensive, expert-level response that goes beyond just summarizing the search results. Include practical advice, best practices, and any additional considerations for successful implementation.`, query, userContext, searchText)
+Please provide a comprehensive, expert-level response that goes beyond just summarizing the search results. Include practical advice, best practices, and any additional considerations for successful implementation.`, args.Query, args.Context, searchText)
 	} else {
 		userPrompt = fmt.Sprintf(`Question: %s
 
@@ -184,82 +210,36 @@ Based on the following search results from Blues documentation, provide expert a
 
 %s
 
-Please provide a comprehensive, expert-level response that goes beyond just summarizing the search results. Include practical advice, best practices, and any additional considerations for successful implementation.`, query, searchText)
+Please provide a comprehensive, expert-level response that goes beyond just summarizing the search results. Include practical advice, best practices, and any additional considerations for successful implementation.`, args.Query, searchText)
 	}
 
-	// Send progress notification to client
-	serverFromCtx := server.ServerFromContext(ctx)
-	if serverFromCtx != nil {
-		// Send a progress notification to let the client know we're processing
-		total := 100.0
-		message := "Analyzing search results and preparing expert consultation..."
-		progressNotification := mcp.NewProgressNotification("expert_search_progress", 50.0, &total, &message)
-
-		// Send as a notification to the client
-		err := serverFromCtx.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
-			"progressToken": progressNotification.Params.ProgressToken,
-			"progress":      progressNotification.Params.Progress,
-			"total":         progressNotification.Params.Total,
-			"message":       progressNotification.Params.Message,
-		})
-		if err != nil {
-			// Log error but don't fail the operation
-			fmt.Printf("Failed to send progress notification: %v\n", err)
-		}
-	}
-
-	// Create sampling request
-
-	samplingRequest := mcp.CreateMessageRequest{
-		CreateMessageParams: mcp.CreateMessageParams{
-			Messages: []mcp.SamplingMessage{
-				{
-					Role: mcp.RoleUser,
-					Content: mcp.TextContent{
-						Type: "text",
-						Text: userPrompt,
-					},
-				},
+	// Create sampling request using the new SDK
+	samplingParams := &mcp.CreateMessageParams{
+		Messages: []*mcp.SamplingMessage{
+			{
+				Role:    "user",
+				Content: &mcp.TextContent{Text: userPrompt},
 			},
-			SystemPrompt: systemPrompt,
-			MaxTokens:    20000,
-			Temperature:  0.3, // Lower temperature for more focused, technical responses
 		},
+		SystemPrompt: systemPrompt,
+		MaxTokens:    4000,
+		Temperature:  0.3, // Lower temperature for more focused, technical responses
 	}
 
 	// Request sampling from the client
-	samplingCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-
-	result, err := serverFromCtx.RequestSampling(samplingCtx, samplingRequest)
+	result, err := request.Session.CreateMessage(ctx, samplingParams)
 	if err != nil {
 		// Check if the error is due to sampling not being supported
 		if isUnsupportedSamplingError(err) {
 			// Fallback: Return enhanced search results with expert guidance
-			return createExpertFallbackResponse(query, userContext, searchText), nil
+			return createExpertFallbackResponse(args.Query, args.Context, searchText), nil, nil
 		}
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				mcp.TextContent{
-					Type: "text",
-					Text: fmt.Sprintf("Error requesting sampling: %v", err),
-				},
+				&mcp.TextContent{Text: fmt.Sprintf("Error requesting sampling: %v", err)},
 			},
 			IsError: true,
-		}, nil
-	}
-
-	// Send completion progress notification
-	if serverFromCtx != nil {
-		total := 100.0
-		completeMessage := "Expert analysis complete!"
-		completionNotification := mcp.NewProgressNotification("expert_search_progress", 100.0, &total, &completeMessage)
-		serverFromCtx.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
-			"progressToken": completionNotification.Params.ProgressToken,
-			"progress":      completionNotification.Params.Progress,
-			"total":         completionNotification.Params.Total,
-			"message":       completionNotification.Params.Message,
-		})
+		}, nil, nil
 	}
 
 	// Extract the expert response
@@ -268,31 +248,16 @@ Please provide a comprehensive, expert-level response that goes beyond just summ
 	// Return the expert analysis
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			mcp.TextContent{
-				Type: "text",
-				Text: fmt.Sprintf("# Notecard Expert Analysis\n\n**Query:** %s\n\n**Expert Response:**\n%s\n\n---\n*Analysis provided by AI model: %s*", query, expertResponse, result.Model),
-			},
+			&mcp.TextContent{Text: fmt.Sprintf("# Notecard Expert Analysis\n\n**Query:** %s\n\n**Expert Response:**\n%s\n\n---\n*Analysis provided by AI model: %s*", args.Query, expertResponse, result.Model)},
 		},
-	}, nil
+	}, nil, nil
 }
 
 // Helper function to extract text from content safely
-func getTextFromContent(content any) string {
+func getTextFromContent(content mcp.Content) string {
 	// Handle the most common case first
-	if textContent, ok := content.(mcp.TextContent); ok {
+	if textContent, ok := content.(*mcp.TextContent); ok {
 		return textContent.Text
-	}
-
-	// Handle map structures (JSON unmarshaled content)
-	if contentMap, ok := content.(map[string]any); ok {
-		if text, ok := contentMap["text"].(string); ok {
-			return text
-		}
-	}
-
-	// Handle string directly
-	if str, ok := content.(string); ok {
-		return str
 	}
 
 	// Fallback to string representation
@@ -304,17 +269,31 @@ func isUnsupportedSamplingError(err error) bool {
 	errorMsg := err.Error()
 	return errorMsg == "session does not support sampling" ||
 		errorMsg == "sampling not supported" ||
-		errorMsg == "client does not support sampling"
+		errorMsg == "client does not support sampling" ||
+		errorMsg == "client does not support CreateMessage"
 }
 
 // createExpertFallbackResponse creates an enhanced response when sampling is not available
 func createExpertFallbackResponse(query, userContext, searchText string) *mcp.CallToolResult {
+	contextMsg := ""
+	if userContext != "" {
+		contextMsg = fmt.Sprintf("\n\n**Additional Context:** %s", userContext)
+	}
+
+	fallbackText := fmt.Sprintf(`# Notecard Documentation Search Results
+
+**Query:** %s%s
+
+**Note:** Expert AI analysis is not available because sampling is not supported by the client. Below are the raw search results from Blues documentation:
+
+%s
+
+---
+*For expert AI-enhanced analysis, please use a client that supports sampling functionality.*`, query, contextMsg, searchText)
+
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			mcp.TextContent{
-				Type: "text",
-				Text: searchText,
-			},
+			&mcp.TextContent{Text: fallbackText},
 		},
 	}
 }

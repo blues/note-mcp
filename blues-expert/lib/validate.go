@@ -2,9 +2,11 @@ package lib
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,8 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"note-mcp/utils"
-
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	_ "github.com/santhosh-tekuri/jsonschema/v5/httploader" // Enable HTTP/HTTPS loading
 )
@@ -24,10 +25,6 @@ var (
 	schemaOnce  sync.Once
 	schemaErr   error
 	schemaMutex sync.RWMutex
-
-	// Global logger for schema operations
-	globalLogger *utils.MCPLogger
-	loggerMutex  sync.RWMutex
 )
 
 // cacheDir is the directory where schemas are stored
@@ -43,24 +40,6 @@ const cacheExpirationDuration = 24 * time.Hour
 type CacheMetadata struct {
 	FetchTime time.Time `json:"fetch_time"`
 	URL       string    `json:"url"`
-}
-
-// SetGlobalLogger sets the global logger instance for schema operations
-func SetGlobalLogger(logger *utils.MCPLogger) {
-	loggerMutex.Lock()
-	defer loggerMutex.Unlock()
-	globalLogger = logger
-}
-
-// logInfo sends an info log if logger is available
-func logInfo(message string) {
-	loggerMutex.RLock()
-	logger := globalLogger
-	loggerMutex.RUnlock()
-
-	if logger != nil {
-		logger.Info(message)
-	}
 }
 
 // resetSchemaWithLock safely resets the schema state for re-initialization
@@ -93,8 +72,15 @@ func extractRefs(schemaMap map[string]interface{}, baseURL string) []string {
 }
 
 // fetchAndCacheSchema fetches a schema from the URL and caches it
-func fetchAndCacheSchema(url string) (io.Reader, error) {
-	logInfo(fmt.Sprintf("Fetching Notecard API schema from %s...", url))
+func fetchAndCacheSchema(ctx context.Context, request *mcp.CallToolRequest, url string) (io.Reader, error) {
+	// Log that we're fetching the schema
+	if request != nil && request.Session != nil {
+		request.Session.Log(ctx, &mcp.LoggingMessageParams{
+			Level: "info",
+			Data:  fmt.Sprintf("Fetching Notecard API schema from %s...", url),
+		})
+	}
+	log.Printf("Fetching Notecard API schema from %s...", url)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -102,7 +88,14 @@ func fetchAndCacheSchema(url string) (io.Reader, error) {
 	}
 	defer resp.Body.Close()
 
-	logInfo("Schema download in progress, please wait...")
+	// Log schema download progress
+	if request != nil && request.Session != nil {
+		request.Session.Log(ctx, &mcp.LoggingMessageParams{
+			Level: "info",
+			Data:  "Schema download in progress, please wait...",
+		})
+	}
+	log.Println("Schema download in progress, please wait...")
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch schema %s: status %d", url, resp.StatusCode)
@@ -112,7 +105,14 @@ func fetchAndCacheSchema(url string) (io.Reader, error) {
 		return nil, fmt.Errorf("failed to read schema %s: %v", url, err)
 	}
 
-	logInfo("Processing and validating schema...")
+	// Log processing status
+	if request != nil && request.Session != nil {
+		request.Session.Log(ctx, &mcp.LoggingMessageParams{
+			Level: "info",
+			Data:  "Processing and validating schema...",
+		})
+	}
+	log.Println("Processing and validating schema...")
 
 	// Verify it's valid JSON before caching
 	var v interface{}
@@ -120,7 +120,14 @@ func fetchAndCacheSchema(url string) (io.Reader, error) {
 		return nil, fmt.Errorf("invalid JSON schema %s: %v", url, err)
 	}
 
-	logInfo("Caching schema for future use...")
+	// Log caching status
+	if request != nil && request.Session != nil {
+		request.Session.Log(ctx, &mcp.LoggingMessageParams{
+			Level: "info",
+			Data:  "Caching schema for future use...",
+		})
+	}
+	log.Println("Caching schema for future use...")
 
 	// Save to cache
 	cachePath := getCachePath(url)
@@ -135,9 +142,21 @@ func fetchAndCacheSchema(url string) (io.Reader, error) {
 		}
 	}
 
-	logInfo("Schema fetch and cache completed successfully")
+	// Log completion
+	if request != nil && request.Session != nil {
+		request.Session.Log(ctx, &mcp.LoggingMessageParams{
+			Level: "info",
+			Data:  "Schema fetch and cache completed successfully",
+		})
+	}
+	log.Println("Schema fetch and cache completed successfully")
 
 	return bytes.NewReader(data), nil
+}
+
+// fetchAndCacheSchemaBackground fetches a schema without MCP logging (for background operations)
+func fetchAndCacheSchemaBackground(url string) (io.Reader, error) {
+	return fetchAndCacheSchema(context.Background(), nil, url)
 }
 
 // formatErrorMessage formats jsonschema validation errors into user-friendly messages
@@ -308,10 +327,10 @@ func initSchema(url string) error {
 		// Extract and cache referenced schemas
 		refs := extractRefs(mainSchema, url)
 		if len(refs) > 0 {
-			logInfo(fmt.Sprintf("Processing %d referenced schema files...", len(refs)))
+			log.Printf("Processing %d referenced schema files...", len(refs))
 		}
 		for i, refURL := range refs {
-			logInfo(fmt.Sprintf("Loading referenced schema %d/%d: %s", i+1, len(refs), filepath.Base(refURL)))
+			log.Printf("Loading referenced schema %d/%d: %s", i+1, len(refs), filepath.Base(refURL))
 			refReader, err := loadOrFetchSchema(refURL)
 			if err != nil {
 				schemaErr = fmt.Errorf("failed to load referenced schema %s: %v", refURL, err)
@@ -346,7 +365,7 @@ func loadOrFetchSchema(url string) (io.Reader, error) {
 		// Check if cache has expired
 		if isCacheExpired(url) {
 			// Cache expired: fetch fresh copy
-			return fetchAndCacheSchema(url)
+			return fetchAndCacheSchemaBackground(url)
 		}
 
 		data, err := io.ReadAll(file)
@@ -357,12 +376,12 @@ func loadOrFetchSchema(url string) (io.Reader, error) {
 		var v interface{}
 		if err := json.Unmarshal(data, &v); err != nil {
 			// Invalid cache: proceed to fetch
-			return fetchAndCacheSchema(url)
+			return fetchAndCacheSchemaBackground(url)
 		}
 		return bytes.NewReader(data), nil
 	}
 	// Cache miss: fetch from URL
-	return fetchAndCacheSchema(url)
+	return fetchAndCacheSchemaBackground(url)
 }
 
 // resolveSchemaError attempts to validate against specific request schemas for better error messages
@@ -470,7 +489,7 @@ type PropertySubDescription struct {
 }
 
 // GetNotecardAPIs returns API documentation for a specific API or lists available APIs
-func GetNotecardAPIs(apiName string) (*APICategory, error) {
+func GetNotecardAPIs(ctx context.Context, request *mcp.CallToolRequest, apiName string) (*APICategory, error) {
 	// Ensure schema is initialized
 	if err := initSchema(defaultSchemaURL); err != nil {
 		return nil, fmt.Errorf("failed to initialize schema: %v", err)
@@ -484,7 +503,14 @@ func GetNotecardAPIs(apiName string) (*APICategory, error) {
 
 	// If no cache files found, force schema initialization to populate cache
 	if len(cacheFiles) == 0 {
-		logInfo("No cached API schema found, fetching fresh schema from remote...")
+		// Log to client that we're fetching fresh schema
+		if request != nil && request.Session != nil {
+			request.Session.Log(ctx, &mcp.LoggingMessageParams{
+				Level: "info",
+				Data:  "No cached API schema found, fetching fresh schema from remote...",
+			})
+		}
+		log.Println("No cached API schema found, fetching fresh schema from remote...")
 
 		// Force a fresh fetch by safely resetting the schema cache
 		schemaMutex.Lock()
@@ -513,7 +539,14 @@ func GetNotecardAPIs(apiName string) (*APICategory, error) {
 
 		// Check if the specific API schema file exists
 		if _, err := os.Stat(schemaFile); os.IsNotExist(err) {
-			logInfo(fmt.Sprintf("API '%s' not found in cache, refreshing schema...", apiName))
+			// Log to client that we're refreshing schema
+			if request != nil && request.Session != nil {
+				request.Session.Log(ctx, &mcp.LoggingMessageParams{
+					Level: "info",
+					Data:  fmt.Sprintf("API '%s' not found in cache, refreshing schema...", apiName),
+				})
+			}
+			log.Printf("API '%s' not found in cache, refreshing schema...", apiName)
 
 			// Try to refresh the cache in case the API was recently added
 			schemaMutex.Lock()
@@ -563,9 +596,36 @@ func GetNotecardAPIs(apiName string) (*APICategory, error) {
 		filename := filepath.Base(file)
 		extractedAPIName := strings.TrimSuffix(filename, ".req.notecard.api.json")
 
+		// Load and parse the schema file to get the real description
+		data, err := os.ReadFile(file)
+		if err != nil {
+			// If we can't read the file, use a fallback description
+			allAPIs = append(allAPIs, APIEntry{
+				Name:        extractedAPIName,
+				Description: fmt.Sprintf("Use this tool with api='%s' to get detailed documentation", extractedAPIName),
+			})
+			continue
+		}
+
+		var schemaData map[string]interface{}
+		if err := json.Unmarshal(data, &schemaData); err != nil {
+			// If we can't parse the JSON, use a fallback description
+			allAPIs = append(allAPIs, APIEntry{
+				Name:        extractedAPIName,
+				Description: fmt.Sprintf("Use this tool with api='%s' to get detailed documentation", extractedAPIName),
+			})
+			continue
+		}
+
+		// Extract the real description from the schema
+		description := fmt.Sprintf("Use this tool with api='%s' to get detailed documentation", extractedAPIName)
+		if desc, ok := schemaData["description"].(string); ok && desc != "" {
+			description = desc
+		}
+
 		allAPIs = append(allAPIs, APIEntry{
 			Name:        extractedAPIName,
-			Description: fmt.Sprintf("Use this tool with api='%s' to get detailed documentation", extractedAPIName),
+			Description: description,
 		})
 	}
 
