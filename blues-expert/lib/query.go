@@ -117,11 +117,11 @@ func SearchNotecardDocs(ctx context.Context, request *mcp.CallToolRequest, query
 	if os.Getenv("BLUES_DOCS_API_KEY") != "" {
 		req.Header.Set("x-api-key", os.Getenv("BLUES_DOCS_API_KEY"))
 	} else {
-		// Log that we're fetching API key from AWS
+		// Log that we're requesting permission to access the Blues documentation API
 		if request != nil && request.Session != nil {
 			request.Session.Log(ctx, &mcp.LoggingMessageParams{
 				Level: "info",
-				Data:  "Retrieving API key from AWS Secrets Manager...",
+				Data:  "Requesting access to the blues.dev documentation...",
 			})
 		}
 
@@ -129,7 +129,7 @@ func SearchNotecardDocs(ctx context.Context, request *mcp.CallToolRequest, query
 		if err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
-					&mcp.TextContent{Text: fmt.Sprintf("Failed to retrieve API key: %v", err)},
+					&mcp.TextContent{Text: fmt.Sprintf("Failed to access the blues.dev documentation API: %v", err)},
 				},
 				IsError: true,
 			}, nil
@@ -141,7 +141,7 @@ func SearchNotecardDocs(ctx context.Context, request *mcp.CallToolRequest, query
 	if request != nil && request.Session != nil {
 		request.Session.Log(ctx, &mcp.LoggingMessageParams{
 			Level: "info",
-			Data:  fmt.Sprintf("Searching Blues documentation for: %s", query),
+			Data:  fmt.Sprintf("Searching the blues.dev documentation for: %s", query),
 		})
 	}
 

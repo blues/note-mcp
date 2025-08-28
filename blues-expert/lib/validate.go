@@ -42,7 +42,6 @@ type CacheMetadata struct {
 	URL       string    `json:"url"`
 }
 
-
 // resetSchemaWithLock safely resets the schema state for re-initialization
 // This function must be called with schemaMutex write lock held
 func resetSchemaWithLock() {
