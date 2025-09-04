@@ -31,7 +31,7 @@ var (
 const cacheDir = "/tmp/notecard-schema/"
 
 // Default Notecard API schema URL
-const defaultSchemaURL = "https://raw.githubusercontent.com/blues/notecard-schema/master/notecard.api.json"
+const defaultSchemaURL = "https://github.com/blues/notecard-schema/releases/latest/download/notecard.api.json"
 
 // Cache expiration duration (24 hours)
 const cacheExpirationDuration = 24 * time.Hour
