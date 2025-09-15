@@ -41,6 +41,16 @@ var docs embed.FS
 
 // Firmware Tools
 func HandleFirmwareEntrypointTool(ctx context.Context, request *mcp.CallToolRequest, args FirmwareEntrypointArgs) (*mcp.CallToolResult, any, error) {
+
+	if args.Sdk == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "Error: SDK parameter is required and cannot be empty. Valid values are: Arduino, C, Zephyr, Python"},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
 	// Get the SDK & Index file - convert to lowercase for directory name
 	sdk := strings.ToLower(args.Sdk)
 	indexFile := fmt.Sprintf("docs/%s/index.md", sdk)
