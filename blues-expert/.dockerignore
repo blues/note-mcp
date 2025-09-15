@@ -3,7 +3,6 @@
 .gitignore
 
 # Documentation
-*.md
 README*
 
 # Test files
@@ -35,4 +34,4 @@ main
 
 # Build artifacts
 /build/
-/dist/ 
+/dist/
