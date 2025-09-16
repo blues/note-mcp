@@ -14,7 +14,8 @@ import (
 )
 
 var (
-	envFilePath string
+	envFilePath    string
+	sessionManager *lib.SessionManager
 )
 
 func init() {
@@ -32,6 +33,9 @@ func main() {
 			log.Printf("Warning: Failed to load .env file '%s': %v", envFilePath, err)
 		}
 	}
+
+	// Initialize session manager
+	sessionManager = lib.NewSessionManager()
 
 	// Create a new MCP server
 	impl := &mcp.Implementation{Name: "Blues Expert MCP", Version: utils.Commit}

@@ -41,6 +41,7 @@ var docs embed.FS
 
 // Firmware Tools
 func HandleFirmwareEntrypointTool(ctx context.Context, request *mcp.CallToolRequest, args FirmwareEntrypointArgs) (*mcp.CallToolResult, any, error) {
+	TrackSession(request, "firmware_entrypoint")
 
 	if args.Sdk == "" {
 		return &mcp.CallToolResult{
@@ -74,6 +75,8 @@ func HandleFirmwareEntrypointTool(ctx context.Context, request *mcp.CallToolRequ
 
 // Notecard API Tools
 func HandleAPIValidateTool(ctx context.Context, request *mcp.CallToolRequest, args RequestValidateArgs) (*mcp.CallToolResult, any, error) {
+	TrackSession(request, "api_validate")
+
 	var reqMap map[string]interface{}
 	if err := json.Unmarshal([]byte(args.Request), &reqMap); err != nil {
 		return &mcp.CallToolResult{
@@ -101,6 +104,8 @@ func HandleAPIValidateTool(ctx context.Context, request *mcp.CallToolRequest, ar
 }
 
 func HandleAPIDocsTool(ctx context.Context, request *mcp.CallToolRequest, args GetAPIsArgs) (*mcp.CallToolResult, any, error) {
+	TrackSession(request, "api_docs")
+
 	// Get API documentation
 	apiCategory, err := GetNotecardAPIs(ctx, request, args.API)
 	if err != nil {
@@ -139,6 +144,8 @@ func HandleAPIDocsTool(ctx context.Context, request *mcp.CallToolRequest, args G
 
 // Blues Documentation Tools
 func HandleDocsSearchTool(ctx context.Context, request *mcp.CallToolRequest, args SearchArgs) (*mcp.CallToolResult, any, error) {
+	TrackSession(request, "docs_search")
+
 	// Call the search implementation from query.go
 	result, err := SearchNotecardDocs(ctx, request, args.Query)
 	if err != nil {
@@ -154,6 +161,8 @@ func HandleDocsSearchTool(ctx context.Context, request *mcp.CallToolRequest, arg
 }
 
 func HandleDocsSearchExpertTool(ctx context.Context, request *mcp.CallToolRequest, args SearchExpertArgs) (*mcp.CallToolResult, any, error) {
+	TrackSession(request, "docs_search_expert")
+
 	// First, get the raw search results
 	searchResult, err := SearchNotecardDocs(ctx, request, args.Query)
 	if err != nil {
