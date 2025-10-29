@@ -9,7 +9,7 @@ import (
 func CreateFirmwareEntrypointTool() *mcp.Tool {
 	return &mcp.Tool{
 		Name:        "firmware_entrypoint",
-		Description: "Get a starting point for a firmware project. This tool will return information about developing firmware for the Notecard using a specific SDK.",
+		Description: "Get a starting point for a firmware project. This tool will return information about developing firmware for the Notecard using a specific SDK. ALWAYS use this tool when writing code, before using any other tools as it contains critial information about Notecard implementation.",
 		InputSchema: &jsonschema.Schema{
 			Type: "object",
 			Properties: map[string]*jsonschema.Schema{
@@ -25,6 +25,33 @@ func CreateFirmwareEntrypointTool() *mcp.Tool {
 				},
 			},
 			Required: []string{"sdk"},
+		},
+	}
+}
+
+func CreateFirmwareBestPracticesTool() *mcp.Tool {
+	return &mcp.Tool{
+		Name:        "firmware_best_practices",
+		Description: "Get best practices documentation for firmware development with the Notecard. Returns detailed guidance on specific topics like power management, sensors, templates, etc. for a given SDK.",
+		InputSchema: &jsonschema.Schema{
+			Type: "object",
+			Properties: map[string]*jsonschema.Schema{
+				"sdk": {
+					Type:        "string",
+					Description: "The SDK to use for the firmware project. Must be one of: arduino, c, zephyr, python",
+					Enum: []any{
+						"arduino",
+						"c",
+						"zephyr",
+						"python",
+					},
+				},
+				"document_type": {
+					Type:        "string",
+					Description: "The type of documentation to retrieve (e.g., 'power_management', 'best_practices', 'sensors', 'templates')",
+				},
+			},
+			Required: []string{"sdk", "document_type"},
 		},
 	}
 }

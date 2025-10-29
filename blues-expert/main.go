@@ -50,6 +50,7 @@ func main() {
 
 	// Add tools
 	firmwareEntrypointTool := CreateFirmwareEntrypointTool()
+	firmwareBestPracticesTool := CreateFirmwareBestPracticesTool()
 	apiValidateTool := CreateAPIValidateTool()
 	apiDocsTool := CreateAPIDocsTool()
 	docsSearchTool := CreateDocsSearchTool()
@@ -57,6 +58,7 @@ func main() {
 
 	// Add tool handlers
 	mcp.AddTool(s, firmwareEntrypointTool, lib.HandleFirmwareEntrypointTool)
+	mcp.AddTool(s, firmwareBestPracticesTool, lib.HandleFirmwareBestPracticesTool)
 	mcp.AddTool(s, apiValidateTool, lib.HandleAPIValidateTool)
 	mcp.AddTool(s, apiDocsTool, lib.HandleAPIDocsTool)
 	mcp.AddTool(s, docsSearchTool, lib.HandleDocsSearchTool)

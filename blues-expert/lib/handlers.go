@@ -15,6 +15,12 @@ type FirmwareEntrypointArgs struct {
 	Sdk string `json:"sdk" jsonschema:"The sdk to use for the firmware project. Must be one of: Arduino, C, Zephyr, Python"`
 }
 
+// FirmwareBestPracticesArgs defines the arguments for the firmware best practices tool
+type FirmwareBestPracticesArgs struct {
+	Sdk          string `json:"sdk" jsonschema:"The sdk to use for the firmware project. Must be one of: arduino, c, zephyr, python"`
+	DocumentType string `json:"document_type" jsonschema:"The type of documentation to retrieve (e.g., 'power_management', 'best_practices', 'sensors', 'templates')"`
+}
+
 // RequestValidateArgs defines the arguments for the notecard request validation tool
 type RequestValidateArgs struct {
 	Request string `json:"request" jsonschema:"The JSON string of the request to validate (e.g., '{\"req\":\"card.version\"}', '{\"req\":\"card.temp\",\"minutes\":60}')"`
@@ -63,6 +69,49 @@ func HandleFirmwareEntrypointTool(ctx context.Context, request *mcp.CallToolRequ
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error reading docs: %v", err)},
 			},
+		}, nil, nil
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(docContent)},
+		},
+	}, nil, nil
+}
+
+func HandleFirmwareBestPracticesTool(ctx context.Context, request *mcp.CallToolRequest, args FirmwareBestPracticesArgs) (*mcp.CallToolResult, any, error) {
+	TrackSession(request, "firmware_best_practices")
+
+	if args.Sdk == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "Error: SDK parameter is required and cannot be empty. Valid values are: arduino, c, zephyr, python"},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
+	if args.DocumentType == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "Error: document_type parameter is required and cannot be empty. Examples: 'power_management', 'best_practices', 'sensors', 'templates'"},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
+	// Convert SDK to lowercase for directory name
+	sdk := strings.ToLower(args.Sdk)
+	docFile := fmt.Sprintf("docs/%s/%s.md", sdk, args.DocumentType)
+
+	// Get the docs
+	docContent, err := docs.ReadFile(docFile)
+	if err != nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Error reading documentation: %v. Make sure the SDK ('%s') and document_type ('%s') are valid.", err, sdk, args.DocumentType)},
+			},
+			IsError: true,
 		}, nil, nil
 	}
 
