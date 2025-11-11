@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 )
 
 // FirmwareEntrypointArgs defines the arguments for the firmware entrypoint tool
@@ -222,13 +223,13 @@ func HandleDocsSearchTool(ctx context.Context, request *mcp.CallToolRequest, arg
 		}, nil, nil
 	}
 
-	// Log the response sent to the client
-	if request != nil && request.Session != nil && result != nil && !result.IsError {
-		if len(result.Content) > 0 {
-			request.Session.Log(ctx, &mcp.LoggingMessageParams{
-				Level: "info",
-				Data:  "Search completed successfully",
-			})
+	// Log the response for server debugging
+	if result != nil && !result.IsError && len(result.Content) > 0 {
+		if textContent, ok := result.Content[0].(*mcp.TextContent); ok {
+			log.Debug().
+				Str("tool", "docs_search").
+				Str("response", textContent.Text).
+				Msg("Response sent to client")
 		}
 	}
 
@@ -339,18 +340,21 @@ Please provide a comprehensive, expert-level response that goes beyond just summ
 	// Extract the expert response
 	expertResponse := getTextFromContent(result.Content)
 
-	// Log the response sent to the client
-	if request != nil && request.Session != nil {
-		request.Session.Log(ctx, &mcp.LoggingMessageParams{
-			Level: "info",
-			Data:  fmt.Sprintf("Expert analysis completed successfully using model: %s", result.Model),
-		})
-	}
+	// Format the full response that will be sent to the client
+	fullResponse := fmt.Sprintf("# Notecard Expert Analysis\n\n**Query:** %s\n\n**Expert Response:**\n%s\n\n---\n*Analysis provided by AI model: %s*", args.Query, expertResponse, result.Model)
+
+	// Log the response for server debugging
+	log.Debug().
+		Str("tool", "docs_search_expert").
+		Str("query", args.Query).
+		Str("model", result.Model).
+		Str("response", fullResponse).
+		Msg("Response sent to client")
 
 	// Return the expert analysis
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: fmt.Sprintf("# Notecard Expert Analysis\n\n**Query:** %s\n\n**Expert Response:**\n%s\n\n---\n*Analysis provided by AI model: %s*", args.Query, expertResponse, result.Model)},
+			&mcp.TextContent{Text: fullResponse},
 		},
 	}, nil, nil
 }

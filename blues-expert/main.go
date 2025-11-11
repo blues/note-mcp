@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"log"
 	"net/http"
 	"os"
 
@@ -11,26 +10,32 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 )
 
 var (
 	envFilePath    string
+	logLevel       string
 	sessionManager *lib.SessionManager
 )
 
 func init() {
 	flag.StringVar(&envFilePath, "env", "", "Path to .env file to load environment variables")
+	flag.StringVar(&logLevel, "log-level", "info", "Log level (trace, debug, info, warn, error, fatal, panic)")
 }
 
 func main() {
 	flag.Parse()
 
+	// Initialize logger with specified log level
+	lib.InitLogger(logLevel)
+
 	// Load environment variables from .env file if specified
 	if envFilePath != "" {
-		log.Printf("Loading environment variables from %s", envFilePath)
+		log.Info().Str("path", envFilePath).Msg("Loading environment variables")
 		err := godotenv.Load(envFilePath)
 		if err != nil {
-			log.Printf("Warning: Failed to load .env file '%s': %v", envFilePath, err)
+			log.Warn().Err(err).Str("path", envFilePath).Msg("Failed to load .env file")
 		}
 	}
 
@@ -46,7 +51,7 @@ func main() {
 	s := mcp.NewServer(impl, opts)
 
 	// Send initial startup log
-	log.Println("Blues Expert MCP server starting...")
+	log.Info().Msg("Blues Expert MCP server starting...")
 
 	// Add tools
 	firmwareEntrypointTool := CreateFirmwareEntrypointTool()
@@ -90,12 +95,12 @@ func main() {
 		httpHandler.ServeHTTP(w, r)
 	})
 
-	log.Printf("Starting HTTP server on port %s", port)
-	log.Printf("MCP server available at /expert/")
-	log.Printf("Health check at /expert/health")
+	log.Info().Str("port", port).Msg("Starting HTTP server")
+	log.Info().Msg("MCP server available at /expert/")
+	log.Info().Msg("Health check at /expert/health")
 
 	// Start HTTP server with our custom multiplexer
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("Failed to start HTTP server")
 	}
 }

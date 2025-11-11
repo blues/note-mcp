@@ -77,6 +77,13 @@ type SearchResult struct {
 
 // SearchNotecardDocs performs a search against the Blues documentation API
 func SearchNotecardDocs(ctx context.Context, request *mcp.CallToolRequest, query string) (*mcp.CallToolResult, error) {
+	// Ensure session exists if request is provided
+	if request != nil && request.Session != nil {
+		sessionID := GetSessionIDFromRequest(request)
+		if sessionID != "" {
+			GetSessionManager().GetOrCreateSession(sessionID)
+		}
+	}
 
 	// Create HTTP client with timeout
 	client := &http.Client{
@@ -159,9 +166,15 @@ func SearchNotecardDocs(ctx context.Context, request *mcp.CallToolRequest, query
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
+		// Try to read error response body for more details
+		body, _ := io.ReadAll(resp.Body)
+		errorMsg := fmt.Sprintf("Search API returned status %d", resp.StatusCode)
+		if len(body) > 0 {
+			errorMsg += fmt.Sprintf(": %s", string(body))
+		}
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Search API returned status %d", resp.StatusCode)},
+				&mcp.TextContent{Text: errorMsg},
 			},
 			IsError: true,
 		}, nil
