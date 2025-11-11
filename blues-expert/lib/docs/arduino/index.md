@@ -22,8 +22,9 @@ When either creating a new project or retrofitting existing projects to use the 
 - ALL Notecard code should be in a separate library file from the main sketch (VERY IMPORTANT).
 - Limit modifications to the user's Arduino code; prefer to add new functions to the library file.
 - A 'init' function that initializes the Notecard, along with `hub.set` commands to configure the Notecard.
-  - Before optimising the code, set the `mode` to `continuous` for easy debugging.
-- Once the initial pass has been made, go to [power management](#power-management) to ensure that the Notecard is power efficient..
+  - Before optimising the code, set the `mode` to `continuous` for easy debugging. Use a comment to indicate that the user should change this to `periodic` to fit their application.
+- The first `sendRequest()` call should instead be `sendRequestWithRetry()` to ensure that the request is retried if it fails. This is to address a potential race condition on cold boot.
+- Once the initial pass has been made, go to [power management](#power-management) to ensure that the Notecard is power efficient.
 
 ## Design Patterns
 

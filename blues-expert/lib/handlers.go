@@ -145,9 +145,17 @@ func HandleAPIValidateTool(ctx context.Context, request *mcp.CallToolRequest, ar
 		}, nil, nil
 	}
 
+	// Get schema version for metadata
+	schemaVersion := GetSchemaVersion("")
+
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: "Request validation successful: The JSON request is valid according to the Notecard API schema."},
+			&mcp.TextContent{
+				Text: "Request validation successful: The JSON request is valid according to the Notecard API schema.",
+				Meta: mcp.Meta{
+					"schema_version": schemaVersion,
+				},
+			},
 		},
 	}, nil, nil
 }
@@ -165,6 +173,9 @@ func HandleAPIDocsTool(ctx context.Context, request *mcp.CallToolRequest, args G
 			IsError: true,
 		}, nil, nil
 	}
+
+	// Get schema version for metadata
+	schemaVersion := GetSchemaVersion("")
 
 	var response []byte
 	// If specific API requested, return just the API object
@@ -186,7 +197,12 @@ func HandleAPIDocsTool(ctx context.Context, request *mcp.CallToolRequest, args G
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(response)},
+			&mcp.TextContent{
+				Text: string(response),
+				Meta: mcp.Meta{
+					"schema_version": schemaVersion,
+				},
+			},
 		},
 	}, nil, nil
 }
@@ -204,6 +220,16 @@ func HandleDocsSearchTool(ctx context.Context, request *mcp.CallToolRequest, arg
 			},
 			IsError: true,
 		}, nil, nil
+	}
+
+	// Log the response sent to the client
+	if request != nil && request.Session != nil && result != nil && !result.IsError {
+		if len(result.Content) > 0 {
+			request.Session.Log(ctx, &mcp.LoggingMessageParams{
+				Level: "info",
+				Data:  "Search completed successfully",
+			})
+		}
 	}
 
 	return result, nil, nil
@@ -312,6 +338,14 @@ Please provide a comprehensive, expert-level response that goes beyond just summ
 
 	// Extract the expert response
 	expertResponse := getTextFromContent(result.Content)
+
+	// Log the response sent to the client
+	if request != nil && request.Session != nil {
+		request.Session.Log(ctx, &mcp.LoggingMessageParams{
+			Level: "info",
+			Data:  fmt.Sprintf("Expert analysis completed successfully using model: %s", result.Model),
+		})
+	}
 
 	// Return the expert analysis
 	return &mcp.CallToolResult{

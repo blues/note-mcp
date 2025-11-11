@@ -38,8 +38,9 @@ const cacheExpirationDuration = 24 * time.Hour
 
 // CacheMetadata represents metadata for cached schema files
 type CacheMetadata struct {
-	FetchTime time.Time `json:"fetch_time"`
-	URL       string    `json:"url"`
+	FetchTime     time.Time `json:"fetch_time"`
+	URL           string    `json:"url"`
+	SchemaVersion string    `json:"schema_version,omitempty"`
 }
 
 // resetSchemaWithLock safely resets the schema state for re-initialization
@@ -114,10 +115,16 @@ func fetchAndCacheSchema(ctx context.Context, request *mcp.CallToolRequest, url 
 	}
 	log.Println("Processing and validating schema...")
 
-	// Verify it's valid JSON before caching
-	var v interface{}
-	if err := json.Unmarshal(data, &v); err != nil {
+	// Verify it's valid JSON before caching and extract version
+	var schemaMap map[string]interface{}
+	if err := json.Unmarshal(data, &schemaMap); err != nil {
 		return nil, fmt.Errorf("invalid JSON schema %s: %v", url, err)
+	}
+
+	// Extract schema version from the schema if available
+	var schemaVersion string
+	if version, ok := schemaMap["version"].(string); ok {
+		schemaVersion = version
 	}
 
 	// Log caching status
@@ -136,8 +143,8 @@ func fetchAndCacheSchema(ctx context.Context, request *mcp.CallToolRequest, url 
 		// Log error but continue - don't fail if we can't cache
 		fmt.Fprintf(os.Stderr, "warning: failed to cache schema %s: %v\n", url, err)
 	} else {
-		// Save cache metadata
-		if err := saveCacheMetadata(url, fetchTime); err != nil {
+		// Save cache metadata with schema version
+		if err := saveCacheMetadata(url, fetchTime, schemaVersion); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to save cache metadata for %s: %v\n", url, err)
 		}
 	}
@@ -230,10 +237,11 @@ func getCacheMetadataPath(url string) string {
 }
 
 // saveCacheMetadata saves metadata for a cached schema file
-func saveCacheMetadata(url string, fetchTime time.Time) error {
+func saveCacheMetadata(url string, fetchTime time.Time, schemaVersion string) error {
 	metadata := CacheMetadata{
-		FetchTime: fetchTime,
-		URL:       url,
+		FetchTime:     fetchTime,
+		URL:           url,
+		SchemaVersion: schemaVersion,
 	}
 
 	metadataPath := getCacheMetadataPath(url)
@@ -275,6 +283,24 @@ func isCacheExpired(url string) bool {
 	}
 
 	return time.Since(metadata.FetchTime) > cacheExpirationDuration
+}
+
+// GetSchemaVersion retrieves the schema version from cache metadata
+func GetSchemaVersion(schemaURL string) string {
+	if schemaURL == "" {
+		schemaURL = defaultSchemaURL
+	}
+
+	metadata, err := loadCacheMetadata(schemaURL)
+	if err != nil {
+		return "unknown"
+	}
+
+	if metadata.SchemaVersion == "" {
+		return "unknown"
+	}
+
+	return metadata.SchemaVersion
 }
 
 // initSchema compiles the schema, using cached files if available
