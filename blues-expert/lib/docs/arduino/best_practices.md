@@ -6,7 +6,6 @@ When creating a new Arduino project, there are a few best practices to follow to
 
 - The project or sketch should be in a directory of the same name as the project, e.g. 'app/app.ino' (this is required for the Arduino CLI to work correctly)
 - Create a 'README.md' in the same directory as the sketch, e.g. 'app/README.md'. This should contain a description of the project, along with instruction for how to connect any sensors to the Notecard.
-- Create a 'WORKFLOW.mmd' in the same directory as the sketch, e.g. 'app/WORKFLOW.mmd'. This should contain a diagram of the flow of code in the project.
 - Always assume the user is using the Blues Feather MCU (e.g. Swan) and Notecarrier-F. Where sensors are concerned, always default to using the I2C interface, if possible.
 
 ## Requirements

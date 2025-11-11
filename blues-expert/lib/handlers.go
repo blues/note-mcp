@@ -8,11 +8,18 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 )
 
 // FirmwareEntrypointArgs defines the arguments for the firmware entrypoint tool
 type FirmwareEntrypointArgs struct {
 	Sdk string `json:"sdk" jsonschema:"The sdk to use for the firmware project. Must be one of: Arduino, C, Zephyr, Python"`
+}
+
+// FirmwareBestPracticesArgs defines the arguments for the firmware best practices tool
+type FirmwareBestPracticesArgs struct {
+	Sdk          string `json:"sdk" jsonschema:"The sdk to use for the firmware project. Must be one of: arduino, c, zephyr, python"`
+	DocumentType string `json:"document_type" jsonschema:"The type of documentation to retrieve (e.g., 'power_management', 'best_practices', 'sensors', 'templates')"`
 }
 
 // RequestValidateArgs defines the arguments for the notecard request validation tool
@@ -73,6 +80,49 @@ func HandleFirmwareEntrypointTool(ctx context.Context, request *mcp.CallToolRequ
 	}, nil, nil
 }
 
+func HandleFirmwareBestPracticesTool(ctx context.Context, request *mcp.CallToolRequest, args FirmwareBestPracticesArgs) (*mcp.CallToolResult, any, error) {
+	TrackSession(request, "firmware_best_practices")
+
+	if args.Sdk == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "Error: SDK parameter is required and cannot be empty. Valid values are: arduino, c, zephyr, python"},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
+	if args.DocumentType == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "Error: document_type parameter is required and cannot be empty. Examples: 'power_management', 'best_practices', 'sensors', 'templates'"},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
+	// Convert SDK to lowercase for directory name
+	sdk := strings.ToLower(args.Sdk)
+	docFile := fmt.Sprintf("docs/%s/%s.md", sdk, args.DocumentType)
+
+	// Get the docs
+	docContent, err := docs.ReadFile(docFile)
+	if err != nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Error reading documentation: %v. Make sure the SDK ('%s') and document_type ('%s') are valid.", err, sdk, args.DocumentType)},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(docContent)},
+		},
+	}, nil, nil
+}
+
 // Notecard API Tools
 func HandleAPIValidateTool(ctx context.Context, request *mcp.CallToolRequest, args RequestValidateArgs) (*mcp.CallToolResult, any, error) {
 	TrackSession(request, "api_validate")
@@ -96,9 +146,17 @@ func HandleAPIValidateTool(ctx context.Context, request *mcp.CallToolRequest, ar
 		}, nil, nil
 	}
 
+	// Get schema version for metadata
+	schemaVersion := GetSchemaVersion("")
+
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: "Request validation successful: The JSON request is valid according to the Notecard API schema."},
+			&mcp.TextContent{
+				Text: "Request validation successful: The JSON request is valid according to the Notecard API schema.",
+				Meta: mcp.Meta{
+					"schema_version": schemaVersion,
+				},
+			},
 		},
 	}, nil, nil
 }
@@ -116,6 +174,9 @@ func HandleAPIDocsTool(ctx context.Context, request *mcp.CallToolRequest, args G
 			IsError: true,
 		}, nil, nil
 	}
+
+	// Get schema version for metadata
+	schemaVersion := GetSchemaVersion("")
 
 	var response []byte
 	// If specific API requested, return just the API object
@@ -137,7 +198,12 @@ func HandleAPIDocsTool(ctx context.Context, request *mcp.CallToolRequest, args G
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(response)},
+			&mcp.TextContent{
+				Text: string(response),
+				Meta: mcp.Meta{
+					"schema_version": schemaVersion,
+				},
+			},
 		},
 	}, nil, nil
 }
@@ -155,6 +221,16 @@ func HandleDocsSearchTool(ctx context.Context, request *mcp.CallToolRequest, arg
 			},
 			IsError: true,
 		}, nil, nil
+	}
+
+	// Log the response for server debugging
+	if result != nil && !result.IsError && len(result.Content) > 0 {
+		if textContent, ok := result.Content[0].(*mcp.TextContent); ok {
+			log.Debug().
+				Str("tool", "docs_search").
+				Str("response", textContent.Text).
+				Msg("Response sent to client")
+		}
 	}
 
 	return result, nil, nil
@@ -264,10 +340,21 @@ Please provide a comprehensive, expert-level response that goes beyond just summ
 	// Extract the expert response
 	expertResponse := getTextFromContent(result.Content)
 
+	// Format the full response that will be sent to the client
+	fullResponse := fmt.Sprintf("# Notecard Expert Analysis\n\n**Query:** %s\n\n**Expert Response:**\n%s\n\n---\n*Analysis provided by AI model: %s*", args.Query, expertResponse, result.Model)
+
+	// Log the response for server debugging
+	log.Debug().
+		Str("tool", "docs_search_expert").
+		Str("query", args.Query).
+		Str("model", result.Model).
+		Str("response", fullResponse).
+		Msg("Response sent to client")
+
 	// Return the expert analysis
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: fmt.Sprintf("# Notecard Expert Analysis\n\n**Query:** %s\n\n**Expert Response:**\n%s\n\n---\n*Analysis provided by AI model: %s*", args.Query, expertResponse, result.Model)},
+			&mcp.TextContent{Text: fullResponse},
 		},
 	}, nil, nil
 }

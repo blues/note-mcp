@@ -2,11 +2,11 @@ package lib
 
 import (
 	"encoding/json"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 )
 
 var globalSessionManager *SessionManager
@@ -82,7 +82,7 @@ func (sm *SessionManager) GetOrCreateSession(sessionID string) *SessionData {
 			RequestLog:   make([]RequestLog, 0),
 		}
 		sm.sessions[sessionID] = session
-		log.Printf("Session %s created", sessionID)
+		log.Info().Str("session_id", sessionID).Msg("Session created")
 	} else {
 		session.LastAccessed = time.Now()
 	}
@@ -123,8 +123,11 @@ func (sm *SessionManager) RemoveSession(sessionID string) {
 
 	if session, exists := sm.sessions[sessionID]; exists {
 		// Log session exit with summary statistics
-		log.Printf("Session %s exited after %d requests (duration: %v)",
-			sessionID, session.RequestCount, time.Since(session.CreatedAt).Truncate(time.Second))
+		log.Info().
+			Str("session_id", sessionID).
+			Int64("request_count", session.RequestCount).
+			Dur("duration", time.Since(session.CreatedAt).Truncate(time.Second)).
+			Msg("Session exited")
 		delete(sm.sessions, sessionID)
 	}
 }
@@ -171,10 +174,12 @@ func (sm *SessionManager) cleanupExpiredSessions() {
 		// Remove expired sessions
 		for _, sessionID := range expiredSessions {
 			if session, exists := sm.sessions[sessionID]; exists {
-				log.Printf("Session %s expired after %d requests (duration: %v, idle: %v)",
-					sessionID, session.RequestCount,
-					time.Since(session.CreatedAt).Truncate(time.Second),
-					time.Since(session.LastAccessed).Truncate(time.Second))
+				log.Info().
+					Str("session_id", sessionID).
+					Int64("request_count", session.RequestCount).
+					Dur("duration", time.Since(session.CreatedAt).Truncate(time.Second)).
+					Dur("idle", time.Since(session.LastAccessed).Truncate(time.Second)).
+					Msg("Session expired")
 				delete(sm.sessions, sessionID)
 			}
 		}
@@ -182,7 +187,7 @@ func (sm *SessionManager) cleanupExpiredSessions() {
 		sm.mu.Unlock()
 
 		if len(expiredSessions) > 0 {
-			log.Printf("Cleaned up %d expired sessions", len(expiredSessions))
+			log.Info().Int("count", len(expiredSessions)).Msg("Cleaned up expired sessions")
 		}
 	}
 }
@@ -198,10 +203,13 @@ func GetSessionIDFromRequest(request *mcp.CallToolRequest) string {
 // LogSessionActivity logs session activity for monitoring
 func LogSessionActivity(sessionID, toolName string, sessionData *SessionData) {
 	if sessionID == "" || sessionID == "stateless" {
-		log.Printf("Tool %s called (stateless session)", toolName)
+		log.Debug().Str("tool", toolName).Msg("Tool called (stateless session)")
 	} else {
-		log.Printf("Tool %s called by session %s (requests: %d)",
-			toolName, sessionID, sessionData.RequestCount)
+		log.Debug().
+			Str("tool", toolName).
+			Str("session_id", sessionID).
+			Int64("request_count", sessionData.RequestCount).
+			Msg("Tool called")
 	}
 }
 
@@ -219,18 +227,30 @@ func LogSessionActivityWithArgs(sessionID, toolName string, sessionData *Session
 	}
 
 	if sessionID == "" || sessionID == "stateless" {
-		log.Printf("Tool %s called (stateless session) with args: %s", toolName, argsStr)
+		log.Debug().
+			Str("tool", toolName).
+			Str("arguments", argsStr).
+			Msg("Tool called (stateless session)")
 	} else {
 		historyCount := len(sessionData.RequestLog)
 		totalRequests := sessionData.RequestCount
 
 		// Show if we've truncated history
 		if totalRequests > int64(historyCount) && historyCount == 50 {
-			log.Printf("Tool %s called by session %s (total: %d requests, recent: %d stored) with args: %s",
-				toolName, sessionID, totalRequests, historyCount, argsStr)
+			log.Debug().
+				Str("tool", toolName).
+				Str("session_id", sessionID).
+				Int64("total_requests", totalRequests).
+				Int("stored_requests", historyCount).
+				Str("arguments", argsStr).
+				Msg("Tool called")
 		} else {
-			log.Printf("Tool %s called by session %s (requests: %d) with args: %s",
-				toolName, sessionID, totalRequests, argsStr)
+			log.Debug().
+				Str("tool", toolName).
+				Str("session_id", sessionID).
+				Int64("request_count", totalRequests).
+				Str("arguments", argsStr).
+				Msg("Tool called")
 		}
 	}
 }

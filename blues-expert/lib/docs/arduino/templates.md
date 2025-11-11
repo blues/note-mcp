@@ -4,16 +4,7 @@ When building an application that is expected to operate over a long period of t
 
 ## Working with Note Templates
 
-By default, the Notecard allows for maximum developer flexibility in the structure and content of Notes. As such, individual Notes in a Notefile do not share structure or schema. You can add JSON structures and payloads of any type and format to a Notefile, adding and removing fields as required by your application.
-
-In order to provide this simplicity to developers, the design of the Notefile system is primarily memory based and designed to support no more than 100 Notes per Notefile. As long as your data needs and sync periods ensure regular uploads of data to Notehub, this limit is adequate for most applications.
-
-Some applications, however, will need to track and stage bursts of data that may eclipse the 100 Note limit in a short period of time, and before a sync can occur. For these types of use cases, the Notecard supports using a flash-based storage system based on Note templates.
-
 Using the `note.template` request with any `.qo` or `.qos` Notefile, developers can provide the Notecard with a schema of sorts to apply to future Notes added to the Notefile. This template acts as a hint to the Notecard that allows it to internally store data as fixed-length records rather than as flexible JSON objects, which tend to be much larger.
-
-> Note:
-> Note Templates are required for both inbound and outbound Notefiles when using Notecard LoRa or NTN mode with Starnote.
 
 ## Creating a Template
 

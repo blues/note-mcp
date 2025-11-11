@@ -43,4 +43,4 @@ USER appuser
 EXPOSE 8080
 
 # Run the binary
-CMD ["./main"]
+CMD ["./main", "-log-level", "debug"]
