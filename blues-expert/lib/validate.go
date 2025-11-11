@@ -75,16 +75,6 @@ func extractRefs(schemaMap map[string]interface{}, baseURL string) []string {
 // fetchAndCacheSchema fetches a schema from the URL and caches it
 // If request is provided, it will create or retrieve a session for logging
 func fetchAndCacheSchema(ctx context.Context, request *mcp.CallToolRequest, url string) (io.Reader, error) {
-	// Get or create session if request is provided
-	var sessionID string
-	if request != nil && request.Session != nil {
-		sessionID = GetSessionIDFromRequest(request)
-		if sessionID != "" {
-			// Ensure session exists in the session manager
-			GetSessionManager().GetOrCreateSession(sessionID)
-		}
-	}
-
 	// Log that we're fetching the schema
 	if request != nil && request.Session != nil {
 		request.Session.Log(ctx, &mcp.LoggingMessageParams{
