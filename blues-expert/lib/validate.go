@@ -82,7 +82,7 @@ func fetchAndCacheSchema(ctx context.Context, request *mcp.CallToolRequest, url 
 			Data:  fmt.Sprintf("Fetching Notecard API schema from %s...", url),
 		})
 	}
-	log.Info().Str("url", url).Msg("Fetching Notecard API schema")
+	log.Debug().Str("url", url).Msg("Fetching Notecard API schema")
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -135,7 +135,7 @@ func fetchAndCacheSchema(ctx context.Context, request *mcp.CallToolRequest, url 
 			Data:  "Caching schema for future use...",
 		})
 	}
-	log.Info().Msg("Caching schema for future use...")
+	log.Debug().Msg("Caching schema for future use...")
 
 	// Save to cache
 	cachePath := getCachePath(url)
@@ -354,10 +354,10 @@ func initSchema(url string) error {
 		// Extract and cache referenced schemas
 		refs := extractRefs(mainSchema, url)
 		if len(refs) > 0 {
-			log.Info().Int("count", len(refs)).Msg("Processing referenced schema files")
+			log.Debug().Int("count", len(refs)).Msg("Processing referenced schema files")
 		}
 		for i, refURL := range refs {
-			log.Info().
+			log.Debug().
 				Int("current", i+1).
 				Int("total", len(refs)).
 				Str("file", filepath.Base(refURL)).
@@ -541,7 +541,7 @@ func GetNotecardAPIs(ctx context.Context, request *mcp.CallToolRequest, apiName 
 				Data:  "No cached API schema found, fetching fresh schema from remote...",
 			})
 		}
-		log.Info().Msg("No cached API schema found, fetching fresh schema from remote...")
+		log.Debug().Msg("No cached API schema found, fetching fresh schema from remote...")
 
 		// Force a fresh fetch by safely resetting the schema cache
 		schemaMutex.Lock()
@@ -577,7 +577,7 @@ func GetNotecardAPIs(ctx context.Context, request *mcp.CallToolRequest, apiName 
 					Data:  fmt.Sprintf("API '%s' not found in cache, refreshing schema...", apiName),
 				})
 			}
-			log.Info().Str("api", apiName).Msg("API not found in cache, refreshing schema...")
+			log.Debug().Str("api", apiName).Msg("API not found in cache, refreshing schema...")
 
 			// Try to refresh the cache in case the API was recently added
 			schemaMutex.Lock()
