@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"net/http"
 	"os"
@@ -22,6 +23,33 @@ var (
 func init() {
 	flag.StringVar(&envFilePath, "env", "", "Path to .env file to load environment variables")
 	flag.StringVar(&logLevel, "log-level", "info", "Log level (trace, debug, info, warn, error, fatal, panic)")
+}
+
+// panicRecoveryMiddleware wraps an HTTP handler with panic recovery
+func panicRecoveryMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Error().
+					Interface("error", err).
+					Str("path", r.URL.Path).
+					Str("method", r.Method).
+					Msg("Panic recovered in HTTP handler")
+
+				// Return a 500 error to the client
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				errorResponse := map[string]any{
+					"error": map[string]any{
+						"code":    -32603,
+						"message": "Internal server error: panic recovered",
+					},
+				}
+				json.NewEncoder(w).Encode(errorResponse)
+			}
+		}()
+		next(w, r)
+	}
 }
 
 func main() {
@@ -90,10 +118,10 @@ func main() {
 		return s
 	}, nil)
 
-	// Route MCP server requests to /expert/ path
-	mux.HandleFunc("/expert/", func(w http.ResponseWriter, r *http.Request) {
+	// Route MCP server requests to /expert/ path with panic recovery
+	mux.HandleFunc("/expert/", panicRecoveryMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		httpHandler.ServeHTTP(w, r)
-	})
+	}))
 
 	log.Info().Str("port", port).Msg("Starting HTTP server")
 	log.Info().Msg("MCP server available at /expert/")

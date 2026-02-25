@@ -148,6 +148,14 @@ func SearchNotecardDocs(ctx context.Context, request *mcp.CallToolRequest, query
 	// Make the request
 	resp, err := client.Do(req)
 	if err != nil {
+		// Log the error for server-side debugging
+		if request != nil && request.Session != nil {
+			request.Session.Log(ctx, &mcp.LoggingMessageParams{
+				Level: "error",
+				Data:  fmt.Sprintf("Ragpi request failed: %v", err),
+			})
+		}
+
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Failed to make search request: %v", err)},
@@ -165,6 +173,15 @@ func SearchNotecardDocs(ctx context.Context, request *mcp.CallToolRequest, query
 		if len(body) > 0 {
 			errorMsg += fmt.Sprintf(": %s", string(body))
 		}
+
+		// Log the error for server-side debugging
+		if request != nil && request.Session != nil {
+			request.Session.Log(ctx, &mcp.LoggingMessageParams{
+				Level: "error",
+				Data:  fmt.Sprintf("Ragpi API error: %s", errorMsg),
+			})
+		}
+
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: errorMsg},
