@@ -47,6 +47,8 @@ import (
 func CreateProjectListTool() mcp.Tool {
 	return mcp.NewTool("project_list",
 		mcp.WithDescription("List all Notehub projects belonging to the authenticated user"),
+		mcp.WithTitleAnnotation("List Projects"),
+		mcp.WithReadOnlyHintAnnotation(true),
 	)
 }
 
@@ -54,6 +56,8 @@ func CreateProjectListTool() mcp.Tool {
 func CreateProjectDetailTool() mcp.Tool {
 	return mcp.NewTool("project_detail",
 		mcp.WithDescription("Get detailed information about a specific project in a Notehub project"),
+		mcp.WithTitleAnnotation("Get Project Details"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project to get details for"),
@@ -65,6 +69,7 @@ func CreateProjectDetailTool() mcp.Tool {
 func CreateProjectCreateTool() mcp.Tool {
 	return mcp.NewTool("project_create",
 		mcp.WithDescription("Create a new Notehub project. You will need to have a billing account to create a project. You should typically follow up by issuing a 'product_create' request to create a new product in the project, as a Product UID is needed to provision a Notecard."),
+		mcp.WithTitleAnnotation("Create Project"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("The name of the project to create"),
@@ -75,6 +80,23 @@ func CreateProjectCreateTool() mcp.Tool {
 		),
 		mcp.WithString("description",
 			mcp.Description("Optional description for the project"),
+		),
+	)
+}
+
+// CreateDeviceDetailTool creates a tool for getting detailed information about a specific device
+func CreateDeviceDetailTool() mcp.Tool {
+	return mcp.NewTool("device_detail",
+		mcp.WithDescription("Get detailed information about a specific device in a Notehub project, including its status, location, firmware version, and configuration"),
+		mcp.WithTitleAnnotation("Get Device Details"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithString("project_uid",
+			mcp.Required(),
+			mcp.Description("The UID of the project containing the device (format: app:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)"),
+		),
+		mcp.WithString("device_uid",
+			mcp.Required(),
+			mcp.Description("The UID of the device to get details for (format: dev:xxxxxxxxxxxxxxx)"),
 		),
 	)
 }
@@ -111,6 +133,8 @@ func CreateProjectCreateTool() mcp.Tool {
 func CreateDeviceListTool() mcp.Tool {
 	return mcp.NewTool("device_list",
 		mcp.WithDescription("List all devices in a specific Notehub project with optional filtering and pagination"),
+		mcp.WithTitleAnnotation("List Devices"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project to list devices for (format: app:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)"),
@@ -173,6 +197,8 @@ func CreateDeviceListTool() mcp.Tool {
 func CreateProjectEventsTool() mcp.Tool {
 	return mcp.NewTool("project_events",
 		mcp.WithDescription("List all events in a specific Notehub project. Use optional parameters to filter the results."),
+		mcp.WithTitleAnnotation("List Project Events"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project to list events for"),
@@ -247,6 +273,8 @@ func CreateProjectEventsTool() mcp.Tool {
 func CreateCheckNotefilesTool() mcp.Tool {
 	return mcp.NewTool("check_notefiles",
 		mcp.WithDescription("Check for Notefiles that have been sent to Notehub by filtering project events to show only Notefile-related data"),
+		mcp.WithTitleAnnotation("Check Notefiles"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project to check for Notefiles"),
@@ -261,6 +289,7 @@ func CreateCheckNotefilesTool() mcp.Tool {
 func CreateSendNoteTool() mcp.Tool {
 	return mcp.NewTool("send_note",
 		mcp.WithDescription("Send a note to a specific device in a Notehub project"),
+		mcp.WithTitleAnnotation("Send Note to Device"),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project containing the target device"),
@@ -284,6 +313,8 @@ func CreateSendNoteTool() mcp.Tool {
 func CreateRouteListTool() mcp.Tool {
 	return mcp.NewTool("route_list",
 		mcp.WithDescription("List all routes in a specific Notehub project"),
+		mcp.WithTitleAnnotation("List Routes"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project to list routes for"),
@@ -295,6 +326,8 @@ func CreateRouteListTool() mcp.Tool {
 func CreateRouteDetailTool() mcp.Tool {
 	return mcp.NewTool("route_detail",
 		mcp.WithDescription("Get detailed information about a specific route in a Notehub project"),
+		mcp.WithTitleAnnotation("Get Route Details"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project containing the route"),
@@ -310,6 +343,8 @@ func CreateRouteDetailTool() mcp.Tool {
 func CreateDeviceHealthLogTool() mcp.Tool {
 	return mcp.NewTool("device_health_log",
 		mcp.WithDescription("Get device health log information for a specific device in a Notehub project"),
+		mcp.WithTitleAnnotation("Get Device Health Log"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project containing the device"),
@@ -325,6 +360,8 @@ func CreateDeviceHealthLogTool() mcp.Tool {
 func CreateMonitorListTool() mcp.Tool {
 	return mcp.NewTool("monitor_list",
 		mcp.WithDescription("List all monitors in a specific Notehub project"),
+		mcp.WithTitleAnnotation("List Monitors"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project to list monitors for"),
@@ -336,6 +373,8 @@ func CreateMonitorListTool() mcp.Tool {
 func CreateMonitorDetailTool() mcp.Tool {
 	return mcp.NewTool("monitor_detail",
 		mcp.WithDescription("Get detailed information about a specific monitor in a Notehub project"),
+		mcp.WithTitleAnnotation("Get Monitor Details"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project containing the monitor"),
@@ -351,6 +390,8 @@ func CreateMonitorDetailTool() mcp.Tool {
 func CreateDevicePublicKeyTool() mcp.Tool {
 	return mcp.NewTool("device_public_key",
 		mcp.WithDescription("Get device public key information for a specific device in a Notehub project"),
+		mcp.WithTitleAnnotation("Get Device Public Key"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project containing the device"),
@@ -366,6 +407,7 @@ func CreateDevicePublicKeyTool() mcp.Tool {
 func CreateSendEncryptedNoteTool() mcp.Tool {
 	return mcp.NewTool("send_encrypted_note",
 		mcp.WithDescription("Send an encrypted note to a specific device using its public key"),
+		mcp.WithTitleAnnotation("Send Encrypted Note"),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project containing the target device"),
@@ -389,6 +431,8 @@ func CreateSendEncryptedNoteTool() mcp.Tool {
 func CreateBillingAccountListTool() mcp.Tool {
 	return mcp.NewTool("billing_account_list",
 		mcp.WithDescription("List all billing accounts belonging to the authenticated user"),
+		mcp.WithTitleAnnotation("List Billing Accounts"),
+		mcp.WithReadOnlyHintAnnotation(true),
 	)
 }
 
@@ -396,6 +440,7 @@ func CreateBillingAccountListTool() mcp.Tool {
 func CreateProductCreateTool() mcp.Tool {
 	return mcp.NewTool("product_create",
 		mcp.WithDescription("Create a new product in a specific Notehub project"),
+		mcp.WithTitleAnnotation("Create Product"),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project to create the product in"),
@@ -421,9 +466,32 @@ func CreateProductCreateTool() mcp.Tool {
 func CreateProductListTool() mcp.Tool {
 	return mcp.NewTool("product_list",
 		mcp.WithDescription("List all products in a specific Notehub project"),
+		mcp.WithTitleAnnotation("List Products"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project to list products for"),
+		),
+	)
+}
+
+// CreateEnvironmentVariablesGetTool creates a tool for getting environment variables at device, fleet, or project scope
+func CreateEnvironmentVariablesGetTool() mcp.Tool {
+	return mcp.NewTool("environment_variables_get",
+		mcp.WithDescription("Get environment variables at device, fleet, or project scope in a Notehub project"),
+		mcp.WithTitleAnnotation("Get Environment Variables"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithString("project_uid",
+			mcp.Required(),
+			mcp.Description("The UID of the project"),
+		),
+		mcp.WithString("scope",
+			mcp.Required(),
+			mcp.Enum("device", "fleet", "project"),
+			mcp.Description("The scope for getting environment variables: 'device', 'fleet', or 'project'"),
+		),
+		mcp.WithString("uid",
+			mcp.Description("The UID of the specified scope (required when scope is 'device' or 'fleet')"),
 		),
 	)
 }
@@ -432,6 +500,7 @@ func CreateProductListTool() mcp.Tool {
 func CreateEnvironmentVariablesSetTool() mcp.Tool {
 	return mcp.NewTool("environment_variables_set",
 		mcp.WithDescription("Set environment variables at device, fleet, or project scope in a Notehub project"),
+		mcp.WithTitleAnnotation("Set Environment Variables"),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project"),
@@ -455,6 +524,8 @@ func CreateEnvironmentVariablesSetTool() mcp.Tool {
 func CreateFleetListTool() mcp.Tool {
 	return mcp.NewTool("fleet_list",
 		mcp.WithDescription("List all fleets in a specific Notehub project"),
+		mcp.WithTitleAnnotation("List Fleets"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project to list fleets for"),
@@ -466,6 +537,8 @@ func CreateFleetListTool() mcp.Tool {
 func CreateFleetGetTool() mcp.Tool {
 	return mcp.NewTool("fleet_get",
 		mcp.WithDescription("Get detailed information about a specific fleet in a Notehub project"),
+		mcp.WithTitleAnnotation("Get Fleet Details"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project containing the fleet"),
@@ -481,6 +554,8 @@ func CreateFleetGetTool() mcp.Tool {
 func CreateDeviceDfuHistoryTool() mcp.Tool {
 	return mcp.NewTool("device_dfu_history",
 		mcp.WithDescription("Get device DFU (Device Firmware Update) history for a specific device in a Notehub project"),
+		mcp.WithTitleAnnotation("Get Device DFU History"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project containing the device"),
@@ -501,6 +576,8 @@ func CreateDeviceDfuHistoryTool() mcp.Tool {
 func CreateFirmwareHostUploadTool() mcp.Tool {
 	return mcp.NewTool("firmware_host_upload",
 		mcp.WithDescription("Upload a host firmware binary file to a Notehub project"),
+		mcp.WithTitleAnnotation("Upload Host Firmware"),
+		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithString("project_uid",
 			mcp.Required(),
 			mcp.Description("The UID of the project to upload firmware to"),

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 
 	"github.com/joho/godotenv"
 )
@@ -30,28 +31,36 @@ type LoginResponse struct {
 	SessionToken string `json:"session_token"`
 }
 
-// GetNotehubCredentials loads credentials from .env file
+// GetNotehubCredentials loads credentials, checking environment variables first,
+// then falling back to the .env file if they are not set.
 func GetNotehubCredentials(envFilePath string) (NotehubCredentials, error) {
+	username := os.Getenv("NOTEHUB_USER")
+	password := os.Getenv("NOTEHUB_PASS")
+
+	if username != "" && password != "" {
+		return NotehubCredentials{Username: username, Password: password}, nil
+	}
+
 	envFile, err := godotenv.Read(envFilePath)
 	if err != nil {
-		return NotehubCredentials{}, fmt.Errorf("failed to read .env file: %w", err)
+		return NotehubCredentials{}, fmt.Errorf("NOTEHUB_USER/NOTEHUB_PASS not set and failed to read .env file: %w", err)
 	}
 
-	envFileUsername := envFile["NOTEHUB_USER"]
-	envFilePassword := envFile["NOTEHUB_PASS"]
-
-	if envFileUsername == "" {
-		return NotehubCredentials{}, fmt.Errorf("NOTEHUB_USER not found in .env file")
+	if envFile["NOTEHUB_USER"] != "" {
+		username = envFile["NOTEHUB_USER"]
+	}
+	if envFile["NOTEHUB_PASS"] != "" {
+		password = envFile["NOTEHUB_PASS"]
 	}
 
-	if envFilePassword == "" {
-		return NotehubCredentials{}, fmt.Errorf("NOTEHUB_PASS not found in .env file")
+	if username == "" {
+		return NotehubCredentials{}, fmt.Errorf("NOTEHUB_USER not found in environment or .env file")
+	}
+	if password == "" {
+		return NotehubCredentials{}, fmt.Errorf("NOTEHUB_PASS not found in environment or .env file")
 	}
 
-	return NotehubCredentials{
-		Username: envFileUsername,
-		Password: envFilePassword,
-	}, nil
+	return NotehubCredentials{Username: username, Password: password}, nil
 }
 
 // CreateSessionToken creates a session token using username and password

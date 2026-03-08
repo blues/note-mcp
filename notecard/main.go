@@ -38,7 +38,9 @@ func main() {
 		utils.Commit,
 		server.WithToolCapabilities(true),
 		server.WithResourceCapabilities(true, true),
+		server.WithLogging(),
 		server.WithRecovery(),
+		server.WithInstructions("This MCP server provides direct access to a Notecard connected via USB. Use 'notecard_initialize' to establish a connection before sending requests. Use 'notecard_get_apis' to fetch up-to-date API documentation before crafting requests. Use 'notecard_request' to send JSON API requests to the Notecard and read responses."),
 	)
 
 	// Create MCP logger

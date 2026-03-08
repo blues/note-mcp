@@ -39,13 +39,16 @@ func main() {
 		"Notehub MCP",
 		utils.Commit,
 		server.WithToolCapabilities(true),
+		server.WithLogging(),
 		server.WithRecovery(),
+		server.WithInstructions("This MCP server provides access to the Notehub cloud API for managing projects, devices, fleets, routes, and firmware. Use 'project_list' to discover available projects and 'device_list' to enumerate devices. Use 'billing_account_list' before creating new projects. Use 'product_list' to find Product UIDs needed for Notecard provisioning."),
 	)
 
 	// Create and register Notehub tools
 	projectListTool := CreateProjectListTool()
 	projectCreateTool := CreateProjectCreateTool()
 	projectDetailTool := CreateProjectDetailTool()
+	deviceDetailTool := CreateDeviceDetailTool()
 	deviceListTool := CreateDeviceListTool()
 	projectEventsTool := CreateProjectEventsTool()
 	checkNotefilesTool := CreateCheckNotefilesTool()
@@ -60,6 +63,7 @@ func main() {
 	billingAccountListTool := CreateBillingAccountListTool()
 	productCreateTool := CreateProductCreateTool()
 	productListTool := CreateProductListTool()
+	environmentVariablesGetTool := CreateEnvironmentVariablesGetTool()
 	environmentVariablesSetTool := CreateEnvironmentVariablesSetTool()
 	fleetListTool := CreateFleetListTool()
 	fleetGetTool := CreateFleetGetTool()
@@ -70,6 +74,7 @@ func main() {
 	s.AddTool(projectListTool, lib.HandleProjectListTool)
 	s.AddTool(projectCreateTool, lib.HandleProjectCreateTool)
 	s.AddTool(projectDetailTool, lib.HandleProjectDetailTool)
+	s.AddTool(deviceDetailTool, lib.HandleDeviceDetailTool)
 	s.AddTool(deviceListTool, lib.HandleDeviceListTool)
 	s.AddTool(projectEventsTool, lib.HandleProjectEventsTool)
 	s.AddTool(checkNotefilesTool, lib.HandleCheckNotefilesTool)
@@ -84,6 +89,7 @@ func main() {
 	s.AddTool(billingAccountListTool, lib.HandleBillingAccountListTool)
 	s.AddTool(productCreateTool, lib.HandleProductCreateTool)
 	s.AddTool(productListTool, lib.HandleProductListTool)
+	s.AddTool(environmentVariablesGetTool, lib.HandleEnvironmentVariablesGetTool)
 	s.AddTool(environmentVariablesSetTool, lib.HandleEnvironmentVariablesSetTool)
 	s.AddTool(fleetListTool, lib.HandleFleetListTool)
 	s.AddTool(fleetGetTool, lib.HandleFleetGetTool)

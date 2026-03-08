@@ -104,6 +104,31 @@ func HandleProjectDetailTool(ctx context.Context, request mcp.CallToolRequest) (
 	return mcp.NewToolResultText(response), nil
 }
 
+// HandleDeviceDetailTool handles getting detailed information about a specific device
+func HandleDeviceDetailTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if SessionToken == "" {
+		return mcp.NewToolResultError("No session token available. Please refresh token first."), nil
+	}
+
+	projectUID, err := request.RequireString("project_uid")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid project_uid parameter: %v", err)), nil
+	}
+
+	deviceUID, err := request.RequireString("device_uid")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid device_uid parameter: %v", err)), nil
+	}
+
+	endpoint := fmt.Sprintf("/v1/projects/%s/devices/%s", projectUID, deviceUID)
+	response, err := MakeNotehubAPIRequest("GET", endpoint, nil)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get device details: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(response), nil
+}
+
 // HandleDeviceListTool handles listing devices in a Notehub project with optional filtering and pagination
 func HandleDeviceListTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if SessionToken == "" {
@@ -714,6 +739,51 @@ func HandleEnvironmentVariablesSetTool(ctx context.Context, request mcp.CallTool
 	response, err := MakeNotehubAPIRequest("PUT", endpoint, payloadBytes)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to set environment variables: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(response), nil
+}
+
+// HandleEnvironmentVariablesGetTool handles getting environment variables at device, fleet, or project scope
+func HandleEnvironmentVariablesGetTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if SessionToken == "" {
+		return mcp.NewToolResultError("No session token available. Please refresh token first."), nil
+	}
+
+	projectUID, err := request.RequireString("project_uid")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid project_uid parameter: %v", err)), nil
+	}
+
+	scope, err := request.RequireString("scope")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid scope parameter: %v", err)), nil
+	}
+
+	var endpoint string
+
+	switch scope {
+	case "device":
+		uid, err := request.RequireString("uid")
+		if err != nil {
+			return mcp.NewToolResultError("uid is required when scope is 'device'"), nil
+		}
+		endpoint = fmt.Sprintf("/v1/projects/%s/devices/%s/environment_variables", projectUID, uid)
+	case "fleet":
+		uid, err := request.RequireString("uid")
+		if err != nil {
+			return mcp.NewToolResultError("uid is required when scope is 'fleet'"), nil
+		}
+		endpoint = fmt.Sprintf("/v1/projects/%s/fleets/%s/environment_variables", projectUID, uid)
+	case "project":
+		endpoint = fmt.Sprintf("/v1/projects/%s/environment_variables", projectUID)
+	default:
+		return mcp.NewToolResultError("Invalid scope. Must be 'device', 'fleet', or 'project'"), nil
+	}
+
+	response, err := MakeNotehubAPIRequest("GET", endpoint, nil)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get environment variables: %v", err)), nil
 	}
 
 	return mcp.NewToolResultText(response), nil
