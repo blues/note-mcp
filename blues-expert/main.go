@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"note-mcp/blues-expert/lib"
-	"note-mcp/utils"
 
 	"github.com/joho/godotenv"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -71,7 +70,7 @@ func main() {
 	sessionManager = lib.NewSessionManager()
 
 	// Create a new MCP server
-	impl := &mcp.Implementation{Name: "Blues Expert MCP", Version: utils.Commit}
+	impl := &mcp.Implementation{Name: "Blues Expert MCP", Version: commit}
 	opts := &mcp.ServerOptions{
 		Instructions: "This MCP server provides expert guidance on using the Blues Notecard & Notehub. When using this tool for developing firmware, use the 'firmware_entrypoint' tool to get started. Otherwise, use the 'docs_search' or 'docs_search_expert' tool to search the Blues documentation.",
 		HasTools:     true,
