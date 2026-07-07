@@ -35,7 +35,7 @@ ALWAYS:
 - use templates for notes and ensure that the data types are correct. ALWAYS use the `firmware_best_practices` tool with the `templates` document type for more information.
 - use the I2C interface for Notecard communication, unless instructed otherwise by the user.
 - use Blues Expert tools to check and validate Notecard requests and responses.
-- generate a header comment in bother the `.c` and the `.h` files that contains the following information:
+- generate a header comment in both the `.cpp` and the `.h` files that contains the following information:
 
 ```c
 /***************************************************************************
@@ -57,11 +57,22 @@ NEVER:
 
 - layer note-c calls within the user's application code. If the Notecard is used, it should be handled by a function in the newly created library file.
 
+## Available Documentation
+
+Retrieve any of the following with the `firmware_best_practices` tool, passing `sdk: arduino` and the `document_type` shown:
+
+- `best_practices` — project structure, a complete basic example, Notecard response checking, and general embedded firmware best practices. Read this first.
+- `templates` — using Note templates to minimise bandwidth. ALWAYS use templates for Notes.
+- `debugging` — enabling serial debug output, logging, Notecard trace mode, and monitoring traffic.
+- `connectivity` — tuning sync mode/intervals, forcing syncs, checking status, and receiving inbound data.
+- `sensors` — connecting common I2C sensors.
+- `power_management` — optimising for low power. Apply only after the sketch is confirmed working.
+
 ## Power Management
 
 Implement the initial changes following this guide and then ask the user if they would like to optimise the code for power management.
 
-- use the `firmware_best_practices` tool with the `best_practices` document type.
+- use the `firmware_best_practices` tool with the `power_management` document type.
 
 ## Further Reading
 

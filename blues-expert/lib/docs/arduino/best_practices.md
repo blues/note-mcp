@@ -15,7 +15,7 @@ When creating a new Arduino project, there are a few best practices to follow to
 ## Suggestions
 
 - Do not introduce power management features until the user has confirmed that the sketch is working. Offer this as a follow up change.
-- Start with USB Serial debugging to demostrate that the sketch is working. After the user has confirmed that the sketch is working, this can be switched off.
+- Start with USB Serial debugging to demonstrate that the sketch is working. After the user has confirmed that the sketch is working, this can be switched off.
 - If the user asks for their data to be uploaded at a specific interval, ensure to set the `mode` to `periodic` in the `hub.set` request and the `outbound` to their desired interval.
 
 ## Example Basic Project
@@ -100,7 +100,10 @@ void setup()
     for (const size_t start_ms = millis(); !usbSerial && (millis() - start_ms) < usb_timeout_ms;)
         ;
 
-    usbSerial.println("Starting Arduino application for %s...", myProductID);
+    // Arduino's print()/println() do NOT support printf-style format specifiers.
+    // Print each part separately (or use snprintf() into a buffer, then println()).
+    usbSerial.print("Starting Arduino application for ");
+    usbSerial.println(myProductID);
 
     // For low-memory platforms, don't turn on internal Notecard logs.
 #ifndef NOTE_C_LOW_MEM
@@ -225,7 +228,7 @@ It does not make use of the Notecard's templated note feature, see below for mor
 
 ## Use Templates
 
-Use the `arduino_note_templates` tool to get the best practices for formatting a notes using templates for an Arduino project.
+Use the `firmware_best_practices` tool with the `templates` document type to get the best practices for formatting Notes using templates for an Arduino project.
 
 ## Using the STLinkV3 Debugger
 
@@ -235,3 +238,84 @@ If you want to use serial via the STLinkV3 debugger, you can use the following c
 HardwareSerial SerialVCP(PIN_VCP_RX, PIN_VCP_TX);
 #define debugSerial SerialVCP
 ```
+
+## Checking Notecard Responses
+
+The Notecard always returns a response to a `req`-style request. Firmware MUST check that response before trusting any value read from it. In `note-arduino` the pattern is:
+
+```cpp
+J *rsp = notecard.requestAndResponse(notecard.newRequest("card.temp"));
+if (notecard.responseError(rsp)) {
+    // The request failed, or the Notecard reported an "err" field.
+    notecard.logDebug("card.temp request failed\n");
+} else {
+    double temperature = JGetNumber(rsp, "value");
+    // ... use the value ...
+}
+notecard.deleteResponse(rsp); // ALWAYS free the response, even on error.
+```
+
+ALWAYS:
+
+- check `notecard.responseError(rsp)` before reading fields from a response. It returns `true` if the transaction failed OR the Notecard returned an `err` field.
+- call `notecard.deleteResponse(rsp)` for every response obtained via `requestAndResponse()`, on both the success and error paths. Skipping this leaks memory on the host.
+- guard against `NULL` before dereferencing any `J *` returned by `newRequest()`, `requestAndResponse()`, or `JAddObjectToObject()`. `note-arduino` allocates with `malloc()`, which can fail on low-memory hosts.
+
+Use the `firmware_best_practices` tool with the `debugging` document type for guidance on capturing the request/response traffic when a response check fails.
+
+## General Embedded Firmware Best Practices
+
+These practices apply to any Arduino/embedded firmware, not just the Notecard integration. Apply them alongside the Notecard-specific guidance above.
+
+NEVER:
+
+- block the `loop()` with long `delay()` calls in production firmware. `delay()` stalls the entire host and prevents it from servicing other work. Use non-blocking timing based on `millis()` instead (see below). Short `delay()` calls are acceptable in the initial "make it work" pass and in examples, but flag them for removal during optimisation.
+- perform work inside an interrupt service routine (ISR) beyond setting a `volatile` flag or reading a register. Do the real work back in `loop()`.
+- rely on dynamic allocation (`new`/`malloc`) in hot paths on memory-constrained hosts; repeated allocation/free cycles fragment the heap. Prefer statically-sized buffers.
+
+ALWAYS:
+
+- use non-blocking timing for periodic work so the host stays responsive:
+
+```cpp
+static uint32_t lastSampleMs = 0;
+const uint32_t sampleIntervalMs = 15000;
+
+void loop() {
+    uint32_t now = millis();
+    if (now - lastSampleMs >= sampleIntervalMs) {
+        lastSampleMs = now;
+        // take a reading, add a Note, etc.
+    }
+    // other non-blocking work can run here
+}
+```
+
+  Note that `millis()` overflows (wraps to 0) after ~49 days. The subtraction form above (`now - lastSampleMs`) is overflow-safe; comparing absolute timestamps (`now >= lastSampleMs + interval`) is NOT.
+
+- mark any variable shared between an ISR and `loop()` as `volatile`, and read/clear it with interrupts briefly disabled if it is larger than a single word.
+- give every blocking wait a timeout. Never spin on a sensor or peripheral "until ready" without a bound — a disconnected sensor will otherwise hang the device forever. The Notecard example uses a bounded wait for `Serial`:
+
+```cpp
+const size_t usb_timeout_ms = 3000;
+for (const size_t start_ms = millis(); !usbSerial && (millis() - start_ms) < usb_timeout_ms;)
+    ;
+```
+
+- initialise all variables, and prefer fixed-width integer types (`uint8_t`, `int32_t`, `uint32_t`) over `int`/`long` so behaviour is identical across host MCUs.
+- name magic numbers with `const`/`#define` (intervals, thresholds, buffer sizes, I2C addresses) rather than scattering literals through the code.
+- keep `setup()` and `loop()` thin: they should orchestrate calls into the project's library file, not contain sensor or Notecard logic directly (see the [Code Layout](#code-layout) guidance in the `index` document).
+
+TRY TO:
+
+- feed the hardware watchdog (if the host enables one) from the main loop, and let it reset the device if the loop ever stalls. Do not feed it from a timer/ISR, or a hung `loop()` will never be caught.
+- fail safe: on a repeated, unrecoverable error prefer a controlled restart over silently spinning. The Notecard can also restart a stalled host — see the `connectivity` document.
+- keep the state of the application in an explicit state machine (`enum State { ... }`) rather than deep nested conditionals once the sketch grows beyond a couple of tasks.
+- avoid floating-point math on hosts without an FPU where an integer/fixed-point representation will do; it is slower and larger.
+
+## Further Reading
+
+- Use the `firmware_best_practices` tool with the `debugging` document type for logging, trace mode, and serial monitoring.
+- Use the `firmware_best_practices` tool with the `connectivity` document type for tuning sync behaviour and receiving inbound data.
+- Use the `firmware_best_practices` tool with the `power_management` document type once the sketch is confirmed working.
+- Queries about `note-arduino` specifics should be made to the `docs_search` or `docs_search_expert` tool.
