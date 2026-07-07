@@ -66,7 +66,7 @@ Use these read requests (never write configuration in a status check) to observe
 - `hub.status` — reports the current connection state to Notehub.
 - `card.wireless` — reports cellular signal strength and modem state, useful when diagnosing poor connectivity.
 
-Check `notecard.responseError(rsp)` on each of these before reading fields, and always `deleteResponse(rsp)` (see the `best_practices` document).
+Check `notecard.responseError(rsp)` on each of these before reading fields, and always `deleteResponse(rsp)` (see the `best_practices` document). To watch a sync progress live while debugging, use the `debugSyncStatus()` helper described in the `debugging` document.
 
 ## Receiving Inbound Data
 
@@ -95,6 +95,78 @@ notecard.deleteResponse(rsp);
 To process several queued Notes at once, use `note.changes` (which returns all pending Notes in the Notefile) instead of `note.get`. A common robust pattern is to send an acknowledgment Note back to a `.qo` Notefile after acting on a command, so the cloud application knows the action was applied.
 
 In `periodic` or `minimum` mode, inbound Notes only arrive on the `inbound` schedule or after a `hub.sync`. If your application needs prompt commands, either shorten `inbound`, call `hub.sync` when appropriate, or use inbound signals for low-latency delivery.
+
+## Interrupt-Driven Inbound With the ATTN Pin
+
+Polling in a fast loop wastes power and host cycles. When the host can spare a GPIO, prefer letting the Notecard interrupt the host only when an inbound Notefile actually changes. Wire the Notecard's `ATTN` pin to a host GPIO and use the `card.attn` request to arm a file-watch interrupt. This is the interrupt-driven pattern the General Embedded Firmware Best Practices section (in the `best_practices` document) refers to: the ISR does nothing but set a `volatile` flag, and all real work happens back in `loop()`.
+
+Arm the interrupt in `setup()` to fire when a specific inbound Notefile is modified. `mode` is a comma-separated list; `arm,files` clears any prior event, watches the Notefiles in `files`, and pulls `ATTN` low until one of them changes (or `seconds` elapses, if non-zero):
+
+```cpp
+#define ATTN_INPUT_PIN 5 // any interrupt-capable GPIO on the host
+#define INBOUND_QUEUE_NOTEFILE "my-inbound.qi"
+
+// Set by the ISR, read by loop(). MUST be volatile — it is shared with an
+// interrupt context (see the best_practices document).
+static volatile bool attnInterruptOccurred = false;
+
+void attnISR() {
+    attnInterruptOccurred = true; // do nothing else in the ISR
+}
+
+void armAttn() {
+    attnInterruptOccurred = false;
+    J *req = notecard.newRequest("card.attn");
+    JAddStringToObject(req, "mode", "arm,files");
+    const char *files[] = { INBOUND_QUEUE_NOTEFILE };
+    JAddItemToObject(req, "files", JCreateStringArray(files, 1));
+    JAddNumberToObject(req, "seconds", 120); // also wake at least every 2 min; 0 = no timeout
+    notecard.sendRequest(req);
+}
+
+void setup() {
+    // ... notecard.begin() and hub.set as usual ...
+    pinMode(ATTN_INPUT_PIN, INPUT);
+    attachInterrupt(digitalPinToInterrupt(ATTN_INPUT_PIN), attnISR, RISING);
+    armAttn();
+}
+```
+
+In `loop()`, do nothing until the flag is set, then drain the inbound Notefile and re-arm:
+
+```cpp
+void loop() {
+    if (!attnInterruptOccurred) {
+        return; // or sleep / do other non-blocking work
+    }
+    armAttn(); // re-arm before processing so no change is missed
+
+    // Drain all pending inbound Notes.
+    while (true) {
+        J *req = notecard.newRequest("note.get");
+        JAddStringToObject(req, "file", INBOUND_QUEUE_NOTEFILE);
+        JAddBoolToObject(req, "delete", true);
+        J *rsp = notecard.requestAndResponse(req);
+        // responseError is expected (and ends the loop) once the queue is
+        // empty: a {note-noexist} or {file-noexist} error just means "no more".
+        if (notecard.responseError(rsp)) {
+            notecard.deleteResponse(rsp);
+            break;
+        }
+        J *body = JGetObject(rsp, "body");
+        if (body != NULL) {
+            // ... act on the command ...
+        }
+        notecard.deleteResponse(rsp);
+    }
+}
+```
+
+Notes:
+
+- Re-arming with `arm,files` is non-idempotent (it briefly pulls `ATTN` high, then low again). To re-arm using the values from the initial arm without restating them, use `mode: "rearm"` instead.
+- To clear all ATTN monitors, send `mode: "disarm,-all"`.
+- `card.attn` requires a physical wire from the Notecard `ATTN` pin to the chosen host GPIO. `ATTN` can watch many other events too (motion, location fixes, environment-variable changes, USB power); use `docs_search` or the `api_docs` tool for the full `mode` list.
 
 ## Resilience When Offline
 

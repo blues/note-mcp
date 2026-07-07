@@ -261,6 +261,8 @@ ALWAYS:
 - call `notecard.deleteResponse(rsp)` for every response obtained via `requestAndResponse()`, on both the success and error paths. Skipping this leaks memory on the host.
 - guard against `NULL` before dereferencing any `J *` returned by `newRequest()`, `requestAndResponse()`, or `JAddObjectToObject()`. `note-arduino` allocates with `malloc()`, which can fail on low-memory hosts.
 
+For requests that must succeed, use the retrying variants instead of the plain calls: `sendRequestWithRetry(req, timeoutSeconds)` when you do not need the response, and `requestAndResponseWithRetry(req, timeoutSeconds)` when you do. Both retry until the request succeeds or the timeout lapses, and both delete the request object for you. This is especially important for the first request on cold boot (see the [Code Layout](#code-layout) guidance in the `index` document) and for any request the application cannot proceed without.
+
 Use the `firmware_best_practices` tool with the `debugging` document type for guidance on capturing the request/response traffic when a response check fails.
 
 ## General Embedded Firmware Best Practices

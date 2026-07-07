@@ -48,6 +48,24 @@ notecard.logDebugf("temperature=%.2f C\n", temperature);   // printf-style forma
 
 Prefer `logDebugf()` when you need formatted values — unlike Arduino's `Serial.println()`, it accepts printf-style format specifiers. These helpers are no-ops when no debug stream is configured, so they are safe to leave in place.
 
+## Watching a Sync Complete
+
+When debugging connectivity, it is useful to watch a sync progress in real time rather than polling `hub.sync.status` by hand. `note-arduino` provides a helper for exactly this:
+
+```cpp
+// Poll the Notecard for sync status roughly every 1000 ms and print every
+// log level (-1 = all) to the debug stream until the sync settles.
+J *req = notecard.newRequest("hub.sync");
+notecard.sendRequest(req);
+
+while (notecard.debugSyncStatus(1000, -1)) {
+    // debugSyncStatus() returns true while there is pending sync activity to
+    // report, and prints each status line to the configured debug stream.
+}
+```
+
+`debugSyncStatus(pollFrequencyMs, maxLevel)` requires a debug output stream to have been set with `setDebugOutputStream()`. Use it during development only; remove it from production firmware since it blocks the loop while polling.
+
 ## Notecard Trace Mode
 
 For problems that the request/response traffic alone does not explain (connectivity, GPS acquisition, sync timing), enable Notecard **trace mode**. The Notecard then streams a detailed internal log of its activity to the debug output.
