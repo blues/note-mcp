@@ -19,7 +19,7 @@ type FirmwareEntrypointArgs struct {
 // FirmwareBestPracticesArgs defines the arguments for the firmware best practices tool
 type FirmwareBestPracticesArgs struct {
 	Sdk          string `json:"sdk" jsonschema:"The sdk to use for the firmware project. Must be one of: arduino, c, zephyr, python"`
-	DocumentType string `json:"document_type" jsonschema:"The type of documentation to retrieve (e.g., 'power_management', 'best_practices', 'sensors', 'templates')"`
+	DocumentType string `json:"document_type" jsonschema:"The type of documentation to retrieve (e.g., 'best_practices', 'templates', 'debugging', 'connectivity', 'sensors', 'power_management')"`
 }
 
 // RequestValidateArgs defines the arguments for the notecard request validation tool
@@ -95,7 +95,7 @@ func HandleFirmwareBestPracticesTool(ctx context.Context, request *mcp.CallToolR
 	if args.DocumentType == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: document_type parameter is required and cannot be empty. Examples: 'power_management', 'best_practices', 'sensors', 'templates'"},
+				&mcp.TextContent{Text: "Error: document_type parameter is required and cannot be empty. Examples: 'best_practices', 'templates', 'debugging', 'connectivity', 'sensors', 'power_management'"},
 			},
 			IsError: true,
 		}, nil, nil

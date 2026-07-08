@@ -48,7 +48,7 @@ func CreateFirmwareBestPracticesTool() *mcp.Tool {
 				},
 				"document_type": {
 					Type:        "string",
-					Description: "The type of documentation to retrieve (e.g., 'power_management', 'best_practices', 'sensors', 'templates')",
+					Description: "The type of documentation to retrieve (e.g., 'best_practices', 'templates', 'debugging', 'connectivity', 'sensors', 'power_management')",
 				},
 			},
 			Required: []string{"sdk", "document_type"},
