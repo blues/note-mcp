@@ -16,8 +16,13 @@ RUN go mod download
 # Copy source code from parent directory
 COPY ../ .
 
+# Version injected via -ldflags at build time (e.g. a release tag). Left empty
+# for ad-hoc builds so the binary falls back to the embedded VCS revision.
+ARG VERSION=
+
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./blues-expert/
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
+    -ldflags="-X main.version=${VERSION}" -o main ./blues-expert/
 
 # Runtime stage
 FROM alpine:latest
