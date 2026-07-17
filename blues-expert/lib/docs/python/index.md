@@ -71,7 +71,7 @@ Implement the initial changes following this guide and then ask the user if they
 
 ## Further Reading
 
-Queries about note-python specifics should be made to the `docs_search` or `docs_search_expert` tool.
+Queries about note-python specifics should be made to the `docs_search` tool.
 Additionally, the following resources may be useful:
 
 - [note-python GitHub Repository](https://github.com/blues/note-python)

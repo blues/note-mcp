@@ -78,10 +78,3 @@ func CreateDocsSearchTool() *mcp.Tool {
 		Description: "Search the blues.dev documentation for answers to questions about the Notecard, cellular connectivity, GPS, power management, Notehub, and other Notecard-specific topics.",
 	}
 }
-
-func CreateDocsSearchExpertTool() *mcp.Tool {
-	return &mcp.Tool{
-		Name:        "docs_search_expert",
-		Description: "Search the blues.dev documentation and get expert analysis from an LLM Notecard specialist with deep knowledge of IoT product development and embedded systems design. This tool provides more comprehensive, contextual answers than basic search. This tool REQUIRES the client to support Sampling, use `notecard_search` if Sampling is not supported.",
-	}
-}

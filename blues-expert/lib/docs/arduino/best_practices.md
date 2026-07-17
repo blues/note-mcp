@@ -320,4 +320,4 @@ TRY TO:
 - Use the `firmware_best_practices` tool with the `debugging` document type for logging, trace mode, and serial monitoring.
 - Use the `firmware_best_practices` tool with the `connectivity` document type for tuning sync behaviour and receiving inbound data.
 - Use the `firmware_best_practices` tool with the `power_management` document type once the sketch is confirmed working.
-- Queries about `note-arduino` specifics should be made to the `docs_search` or `docs_search_expert` tool.
+- Queries about `note-arduino` specifics should be made to the `docs_search` tool.

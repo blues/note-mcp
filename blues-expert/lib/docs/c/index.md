@@ -14,7 +14,7 @@ Add the library to your project's include path.
 
 ## Further Reading
 
-Queries about note-c specifics should be made to the `docs_search` or `docs_search_expert` tool.
+Queries about note-c specifics should be made to the `docs_search` tool.
 Additionally, the following resources may be useful:
 
 - [note-c GitHub Repository](https://github.com/blues/note-c)
