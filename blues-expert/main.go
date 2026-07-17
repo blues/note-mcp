@@ -70,7 +70,7 @@ func main() {
 	sessionManager = lib.NewSessionManager()
 
 	// Create a new MCP server
-	impl := &mcp.Implementation{Name: "Blues Expert MCP", Version: commit}
+	impl := &mcp.Implementation{Name: "Blues Expert MCP", Version: serverVersion()}
 	opts := &mcp.ServerOptions{
 		Instructions: "This MCP server provides expert guidance on using the Blues Notecard & Notehub. When using this tool for developing firmware, use the 'firmware_entrypoint' tool to get started. Otherwise, use the 'docs_search' tool to search the Blues documentation.",
 		HasTools:     true,
@@ -78,7 +78,7 @@ func main() {
 	s := mcp.NewServer(impl, opts)
 
 	// Send initial startup log
-	log.Info().Msg("Blues Expert MCP server starting...")
+	log.Info().Str("version", serverVersion()).Msg("Blues Expert MCP server starting...")
 
 	// Add tools
 	firmwareEntrypointTool := CreateFirmwareEntrypointTool()
