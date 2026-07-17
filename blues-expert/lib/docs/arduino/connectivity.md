@@ -177,4 +177,4 @@ The Notecard's store-and-forward design means outbound Notes are queued locally 
 
 ## Further Reading
 
-Queries about connectivity, sync behaviour, or Notehub specifics should be made to the `docs_search` or `docs_search_expert` tool. Use the `api_docs` tool for the full argument list of `hub.set`, `hub.sync`, `note.get`, and `note.changes`.
+Queries about connectivity, sync behaviour, or Notehub specifics should be made to the `docs_search` tool. Use the `api_docs` tool for the full argument list of `hub.set`, `hub.sync`, `note.get`, and `note.changes`.

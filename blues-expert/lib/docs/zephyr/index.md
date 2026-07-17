@@ -27,7 +27,7 @@ west update
 
 ## Further Reading
 
-Queries about note-zephyr specifics should be made to the `docs_search` or `docs_search_expert` tool.
+Queries about note-zephyr specifics should be made to the `docs_search` tool.
 Additionally, the following resources may be useful:
 
 - [note-zephyr GitHub Repository](https://github.com/blues/note-zephyr)

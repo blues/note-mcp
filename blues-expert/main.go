@@ -72,7 +72,7 @@ func main() {
 	// Create a new MCP server
 	impl := &mcp.Implementation{Name: "Blues Expert MCP", Version: commit}
 	opts := &mcp.ServerOptions{
-		Instructions: "This MCP server provides expert guidance on using the Blues Notecard & Notehub. When using this tool for developing firmware, use the 'firmware_entrypoint' tool to get started. Otherwise, use the 'docs_search' or 'docs_search_expert' tool to search the Blues documentation.",
+		Instructions: "This MCP server provides expert guidance on using the Blues Notecard & Notehub. When using this tool for developing firmware, use the 'firmware_entrypoint' tool to get started. Otherwise, use the 'docs_search' tool to search the Blues documentation.",
 		HasTools:     true,
 	}
 	s := mcp.NewServer(impl, opts)
@@ -86,7 +86,6 @@ func main() {
 	apiValidateTool := CreateAPIValidateTool()
 	apiDocsTool := CreateAPIDocsTool()
 	docsSearchTool := CreateDocsSearchTool()
-	docsSearchExpertTool := CreateDocsSearchExpertTool()
 
 	// Add tool handlers
 	mcp.AddTool(s, firmwareEntrypointTool, lib.HandleFirmwareEntrypointTool)
@@ -94,7 +93,6 @@ func main() {
 	mcp.AddTool(s, apiValidateTool, lib.HandleAPIValidateTool)
 	mcp.AddTool(s, apiDocsTool, lib.HandleAPIDocsTool)
 	mcp.AddTool(s, docsSearchTool, lib.HandleDocsSearchTool)
-	mcp.AddTool(s, docsSearchExpertTool, lib.HandleDocsSearchExpertTool)
 
 	// Get port from environment variable (AppRunner provides this)
 	port := os.Getenv("PORT")

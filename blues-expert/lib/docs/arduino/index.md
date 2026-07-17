@@ -39,7 +39,7 @@ Work through these steps in order. Each step names the `document_type` to retrie
 6. **Tune connectivity.** Retrieve `connectivity` to switch to `periodic` mode, set the sync intervals to match the user's cadence, force syncs when needed, and receive inbound data.
 7. **Optimise for power — last.** Only after the sketch is confirmed working, ask the user if they want to reduce power consumption, then retrieve `power_management`.
 
-Throughout: validate every Notecard request with the `api_validate` tool, and use `docs_search` / `docs_search_expert` for anything not covered here.
+Throughout: validate every Notecard request with the `api_validate` tool, and use `docs_search` for anything not covered here.
 
 ## Code Layout
 
@@ -85,7 +85,7 @@ NEVER:
 
 ## Further Reading
 
-Queries about note-arduino specifics should be made to the `docs_search` or `docs_search_expert` tool.
+Queries about note-arduino specifics should be made to the `docs_search` tool.
 Additionally, the following resources may be useful:
 
 - [note-arduino GitHub Repository](https://github.com/blues/note-arduino)
