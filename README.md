@@ -1,15 +1,8 @@
-# note-mcp
+# Blues Expert
 
-Blues Expert MCP server for Notecard & Notehub development.
+Blues Expert is a Model Context Protocol (MCP) server that helps you build products with Notecard and Notehub.
 
-> [!WARNING]
-> This MCP server is experimental and subject to change. Please wait until a versioned release is available before relying on it.
-
-## About
-
-The Blues Expert MCP server is a remote tool designed to help you develop Notecard projects.
-When used with an LLM, it provides guidance on best practices for writing firmware and leveraging Notecard's capabilities.
-It provides correct and accurate information about Notecard, reducing hallucinations and errors when building Notecard projects.
+When used with an LLM, Blues Expert provides best practices for firmware development, helps developers take advantage of Notecard capabilities, and supplies accurate information about Blues products to reduce hallucinations and errors.
 
 ## Build
 
