@@ -94,8 +94,10 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # On a release, report the semver; on main/dispatch builds there is no
+          # semver, so fall back to the commit SHA rather than the branch name.
           build-args: |
-            VERSION=${{ steps.meta.outputs.version }}
+            VERSION=${{ github.event_name == 'release' && steps.meta.outputs.version || github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
