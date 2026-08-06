@@ -3,9 +3,16 @@ name: Build and Publish Docker Image
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
   release:
     types: [published]
   workflow_dispatch:
+
+# Cancel superseded PR runs, but never cancel an in-flight main/release deploy.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   REGISTRY_GHCR: ghcr.io
@@ -14,10 +21,40 @@ env:
   IMAGE_NAME_ECR: /blues-dev/blues-expert-mcp
 
 jobs:
+  # Validate the container build on pull requests WITHOUT pushing anywhere.
+  # docker.yml is otherwise skipped on PRs, and audit.yml only runs
+  # `go build`/`go vet`, so this is the only check that exercises the
+  # Dockerfile (and the VERSION build-arg wiring) before a merge.
+  build:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./blues-expert/Dockerfile
+          push: false
+          build-args: |
+            VERSION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
   # Build and push to GitHub Container Registry on every push to main, manual
   # dispatch, and release. This is the general-purpose image used for testing
   # and history; it never touches AWS.
   ghcr:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
