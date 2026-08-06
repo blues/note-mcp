@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"note-mcp/blues-expert/lib"
 
@@ -12,6 +14,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/rs/zerolog/log"
 )
+
+// mcpEndpointPath is the canonical Streamable HTTP endpoint for the MCP server.
+const mcpEndpointPath = "/expert/mcp"
 
 var (
 	envFilePath    string
@@ -48,6 +53,49 @@ func panicRecoveryMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			}
 		}()
 		next(w, r)
+	}
+}
+
+// servePublicSSEStream answers a session-less GET to the MCP endpoint with an
+// open (keep-alive only) SSE stream, returning 200 instead of the go-sdk's
+// default 405 "GET requires an active session".
+//
+// Why: some MCP clients — notably the claude.ai custom-connector flow — probe
+// the endpoint with a session-less GET and treat the SDK's 405 as "this server
+// requires authentication", then attempt an OAuth registration that fails
+// because this server is public. Public reference servers (e.g. DeepWiki)
+// answer a session-less GET with an open SSE stream, which clients accept as a
+// public endpoint. This shim mirrors that behaviour.
+//
+// It only affects a session-less GET on the MCP endpoint. POST, DELETE, and
+// session-scoped GET (the transport paths real clients and Claude Code use) are
+// untouched and still handled by the SDK. No server->client messages are sent
+// here — there is no session to attach them to — so this stream only carries
+// keep-alive comments until the client disconnects.
+func servePublicSSEStream(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
+
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			if _, err := io.WriteString(w, ": keepalive\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
+		}
 	}
 }
 
@@ -115,8 +163,18 @@ func main() {
 		return s
 	}, nil)
 
-	// Route MCP server requests to /expert/ path with panic recovery
+	// Route MCP server requests to /expert/ path with panic recovery.
+	//
+	// Public-server shim: answer a session-less GET to the MCP endpoint with an
+	// open SSE stream rather than letting the SDK return 405 (see
+	// servePublicSSEStream for why). POST, DELETE, and session-scoped GET — the
+	// transport paths real MCP clients and Claude Code use — are untouched and
+	// delegated to the SDK.
 	mux.HandleFunc("/expert/", panicRecoveryMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == mcpEndpointPath && r.Header.Get("Mcp-Session-Id") == "" {
+			servePublicSSEStream(w, r)
+			return
+		}
 		httpHandler.ServeHTTP(w, r)
 	}))
 
