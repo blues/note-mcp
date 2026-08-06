@@ -1,24 +1,25 @@
-name: Build and Publish Docker Image
+name: Deploy to AWS ECR
 
 on:
-  push:
-    branches: [ main ]
   release:
     types: [published]
-  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
-  REGISTRY_GHCR: ghcr.io
-  IMAGE_NAME_GHCR: blues-expert-mcp
   REGISTRY_ECR: 660644769541.dkr.ecr.us-east-1.amazonaws.com
   IMAGE_NAME_ECR: /blues-dev/blues-expert-mcp
 
 jobs:
-  build-and-push:
+  # Deploy to AWS ECR when a versioned GitHub Release is published. AppRunner
+  # auto-deploys the `latest` tag, so `latest` is pushed here (in addition to
+  # the semver tags) to trigger the deploy.
+  ecr:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
       id-token: write
 
     steps:
@@ -27,13 +28,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY_GHCR }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -50,16 +44,12 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: |
-            ${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_GHCR }}
-            ${{ env.REGISTRY_ECR }}${{ env.IMAGE_NAME_ECR }}
+          images: ${{ env.REGISTRY_ECR }}${{ env.IMAGE_NAME_ECR }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -69,6 +59,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
