@@ -8,7 +8,7 @@ When used with an LLM, Blues Expert provides best practices for firmware develop
 
 Requirements:
 
-- Go (at least v1.23)
+- Go (at least v1.27)
 - Make
 - [Docker](https://www.docker.com/products/docker-desktop/)
 
@@ -38,3 +38,5 @@ To run the MCP inspector, you'll need Node.js installed (at least v18).
 ```bash
 make inspect-blues-expert
 ```
+
+If you expose a local server through a tunnel (e.g. ngrok), set `MCP_DISABLE_LOCALHOST_PROTECTION=1`; otherwise the MCP SDK rejects tunneled requests with a 403.

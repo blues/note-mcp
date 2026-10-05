@@ -1,27 +1,29 @@
-# Build stage
-FROM golang:1.23-alpine AS builder
+# Build stage (runs on the build platform and cross-compiles for the target)
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
 
-# Install git (needed for go mod download)
+# Install git (needed for Go's VCS stamping)
 RUN apk add --no-cache git
 
 # Set working directory
 WORKDIR /app
 
-# Copy go mod files from parent directory
-COPY ../go.mod ../go.sum ./
+# Copy go mod files
+COPY go.mod go.sum ./
 
 # Download dependencies
 RUN go mod download
 
-# Copy source code from parent directory
-COPY ../ .
+# Copy source code
+COPY . .
 
 # Version injected via -ldflags at build time (e.g. a release tag). Left empty
 # for ad-hoc builds so the binary falls back to the embedded VCS revision.
 ARG VERSION=
+ARG TARGETOS
+ARG TARGETARCH
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
     -ldflags="-X main.version=${VERSION}" -o main ./blues-expert/
 
 # Runtime stage

@@ -2,11 +2,7 @@ name: Deploy to AWS ECR
 
 on:
   release:
-    types: [published]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+    types: [published, released]
 
 env:
   REGISTRY_ECR: 660644769541.dkr.ecr.us-east-1.amazonaws.com
@@ -15,22 +11,30 @@ env:
 jobs:
   # Deploy to AWS ECR when a versioned GitHub Release is published. AppRunner
   # auto-deploys the `latest` tag, so `latest` is pushed here (in addition to
-  # the semver tags) to trigger the deploy.
+  # the semver tags) to trigger the deploy. Prereleases skip `latest`.
+  # Publishing a full release fires both `published` and `released`, so full
+  # releases (including a prerelease promoted later) run only on `released`.
   ecr:
+    if: github.event.action == 'released' || github.event.release.prerelease
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: ${{ github.workflow }}
+      cancel-in-progress: false
+      queue: max
     permissions:
       contents: read
       id-token: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::660644769541:role/blues-expert-mcp-github
           role-session-name: GitHubActions
@@ -42,17 +46,19 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY_ECR }}${{ env.IMAGE_NAME_ECR }}
+          flavor: |
+            latest=false
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./blues-expert/Dockerfile
@@ -61,6 +67,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
