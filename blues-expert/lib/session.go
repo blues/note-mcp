@@ -9,6 +9,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// SessionIdleTimeout is how long a session may go without a client request
+// before it is dropped, both here and by the MCP SDK's session handling.
+const SessionIdleTimeout = 24 * time.Hour
+
 var globalSessionManager *SessionManager
 
 // RequestLog holds information about a specific request
@@ -164,9 +168,9 @@ func (sm *SessionManager) cleanupExpiredSessions() {
 		now := time.Now()
 		expiredSessions := make([]string, 0)
 
-		// Find sessions that haven't been accessed in the last hour
+		// Find sessions that have been idle longer than SessionIdleTimeout
 		for sessionID, session := range sm.sessions {
-			if now.Sub(session.LastAccessed) > time.Hour {
+			if now.Sub(session.LastAccessed) > SessionIdleTimeout {
 				expiredSessions = append(expiredSessions, sessionID)
 			}
 		}

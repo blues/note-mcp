@@ -227,11 +227,15 @@ func main() {
 		log.Warn().Msg("DNS rebinding (localhost) protection is disabled")
 	}
 
-	// Create StreamableHTTPHandler for MCP requests
+	// Create StreamableHTTPHandler for MCP requests. The session timeout keeps
+	// abandoned sessions from accumulating in memory; only POSTs count as
+	// activity, and a client returning after it expires gets a 404 and must
+	// re-initialize.
 	httpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return s
 	}, &mcp.StreamableHTTPOptions{
 		DisableLocalhostProtection: disableLocalhostProtection,
+		SessionTimeout:             lib.SessionIdleTimeout,
 		Logger:                     sdkLogger,
 	})
 
