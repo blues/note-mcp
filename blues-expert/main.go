@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -117,10 +118,15 @@ func main() {
 	// its cleanup loop). Tool handlers panic if it isn't initialized.
 	lib.NewSessionManager()
 
+	// Route the MCP SDK's warnings and errors through zerolog (its Info lines
+	// are per-session lifecycle chatter)
+	sdkLogger := lib.NewSlogLogger(slog.LevelWarn)
+
 	// Create a new MCP server
 	impl := &mcp.Implementation{Name: "Blues Expert MCP", Version: serverVersion()}
 	opts := &mcp.ServerOptions{
 		Instructions: "This MCP server provides expert guidance on using the Blues Notecard & Notehub. When using this tool for developing firmware, use the 'firmware_entrypoint' tool to get started. Otherwise, use the 'docs_search' tool to search the Blues documentation.",
+		Logger:       sdkLogger,
 	}
 	s := mcp.NewServer(impl, opts)
 
@@ -170,6 +176,7 @@ func main() {
 		return s
 	}, &mcp.StreamableHTTPOptions{
 		DisableLocalhostProtection: disableLocalhostProtection,
+		Logger:                     sdkLogger,
 	})
 
 	// Route MCP server requests to /expert/ path with panic recovery.
