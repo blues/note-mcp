@@ -121,7 +121,6 @@ func main() {
 	impl := &mcp.Implementation{Name: "Blues Expert MCP", Version: serverVersion()}
 	opts := &mcp.ServerOptions{
 		Instructions: "This MCP server provides expert guidance on using the Blues Notecard & Notehub. When using this tool for developing firmware, use the 'firmware_entrypoint' tool to get started. Otherwise, use the 'docs_search' tool to search the Blues documentation.",
-		HasTools:     true,
 	}
 	s := mcp.NewServer(impl, opts)
 
@@ -158,10 +157,20 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
+	// The SDK's DNS rebinding protection rejects requests that arrive over
+	// loopback with a non-localhost Host header (e.g. via a local tunnel).
+	// MCP_DISABLE_LOCALHOST_PROTECTION=1 turns it off without a code change.
+	disableLocalhostProtection := os.Getenv("MCP_DISABLE_LOCALHOST_PROTECTION") == "1"
+	if disableLocalhostProtection {
+		log.Warn().Msg("DNS rebinding (localhost) protection is disabled")
+	}
+
 	// Create StreamableHTTPHandler for MCP requests
 	httpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return s
-	}, nil)
+	}, &mcp.StreamableHTTPOptions{
+		DisableLocalhostProtection: disableLocalhostProtection,
+	})
 
 	// Route MCP server requests to /expert/ path with panic recovery.
 	//
