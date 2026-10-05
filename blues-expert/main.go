@@ -13,6 +13,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -53,6 +54,61 @@ func panicRecoveryMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			}
 		}()
 		next(w, r)
+	}
+}
+
+// statusRecorder captures the response status for logRejectedRequests. It
+// forwards Flush and Unwrap so SSE streaming keeps working through it.
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	if r.status == 0 && code >= http.StatusOK {
+		r.status = code
+	}
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *statusRecorder) Write(b []byte) (int, error) {
+	if r.status == 0 {
+		r.status = http.StatusOK
+	}
+	return r.ResponseWriter.Write(b)
+}
+
+func (r *statusRecorder) Flush() {
+	_ = http.NewResponseController(r.ResponseWriter).Flush()
+}
+
+func (r *statusRecorder) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
+}
+
+// logRejectedRequests logs MCP requests that end in a 4xx or 5xx response,
+// including rejections made inside the SDK (e.g. 415 for a missing
+// Content-Type, 403 for a foreign Host header, 404 for an expired session).
+func logRejectedRequests(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rec := &statusRecorder{ResponseWriter: w}
+		next(rec, r)
+		if rec.status < http.StatusBadRequest {
+			return
+		}
+		level := zerolog.WarnLevel
+		if rec.status >= http.StatusInternalServerError {
+			level = zerolog.ErrorLevel
+		}
+		log.WithLevel(level).
+			Str("method", r.Method).
+			Str("path", r.URL.Path).
+			Int("status", rec.status).
+			Str("host", r.Host).
+			Str("content_type", r.Header.Get("Content-Type")).
+			Str("user_agent", r.UserAgent()).
+			Bool("has_session", r.Header.Get("Mcp-Session-Id") != "").
+			Msg("MCP request rejected")
 	}
 }
 
@@ -186,13 +242,13 @@ func main() {
 	// servePublicSSEStream for why). POST, DELETE, and session-scoped GET — the
 	// transport paths real MCP clients and Claude Code use — are untouched and
 	// delegated to the SDK.
-	mux.HandleFunc("/expert/", panicRecoveryMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/expert/", panicRecoveryMiddleware(logRejectedRequests(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == mcpEndpointPath && r.Header.Get("Mcp-Session-Id") == "" {
 			servePublicSSEStream(w, r)
 			return
 		}
 		httpHandler.ServeHTTP(w, r)
-	}))
+	})))
 
 	log.Info().Str("port", port).Msg("Starting HTTP server")
 	log.Info().Msg("MCP server available at /expert/")
