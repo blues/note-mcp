@@ -2,7 +2,6 @@ package lib
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/rs/zerolog/log"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	_ "github.com/santhosh-tekuri/jsonschema/v5/httploader" // Enable HTTP/HTTPS loading
@@ -73,15 +71,7 @@ func extractRefs(schemaMap map[string]interface{}, baseURL string) []string {
 }
 
 // fetchAndCacheSchema fetches a schema from the URL and caches it
-// If request is provided, it will create or retrieve a session for logging
-func fetchAndCacheSchema(ctx context.Context, request *mcp.CallToolRequest, url string) (io.Reader, error) {
-	// Log that we're fetching the schema
-	if request != nil && request.Session != nil {
-		request.Session.Log(ctx, &mcp.LoggingMessageParams{
-			Level: "info",
-			Data:  fmt.Sprintf("Fetching Notecard API schema from %s...", url),
-		})
-	}
+func fetchAndCacheSchema(url string) (io.Reader, error) {
 	log.Debug().Str("url", url).Msg("Fetching Notecard API schema")
 
 	resp, err := http.Get(url)
@@ -90,13 +80,6 @@ func fetchAndCacheSchema(ctx context.Context, request *mcp.CallToolRequest, url 
 	}
 	defer resp.Body.Close()
 
-	// Log schema download progress
-	if request != nil && request.Session != nil {
-		request.Session.Log(ctx, &mcp.LoggingMessageParams{
-			Level: "info",
-			Data:  "Schema download in progress, please wait...",
-		})
-	}
 	log.Info().Msg("Schema download in progress, please wait...")
 
 	if resp.StatusCode != http.StatusOK {
@@ -107,13 +90,6 @@ func fetchAndCacheSchema(ctx context.Context, request *mcp.CallToolRequest, url 
 		return nil, fmt.Errorf("failed to read schema %s: %v", url, err)
 	}
 
-	// Log processing status
-	if request != nil && request.Session != nil {
-		request.Session.Log(ctx, &mcp.LoggingMessageParams{
-			Level: "info",
-			Data:  "Processing and validating schema...",
-		})
-	}
 	log.Info().Msg("Processing and validating schema...")
 
 	// Verify it's valid JSON before caching and extract version
@@ -128,13 +104,6 @@ func fetchAndCacheSchema(ctx context.Context, request *mcp.CallToolRequest, url 
 		schemaVersion = version
 	}
 
-	// Log caching status
-	if request != nil && request.Session != nil {
-		request.Session.Log(ctx, &mcp.LoggingMessageParams{
-			Level: "info",
-			Data:  "Caching schema for future use...",
-		})
-	}
 	log.Debug().Msg("Caching schema for future use...")
 
 	// Save to cache
@@ -150,21 +119,9 @@ func fetchAndCacheSchema(ctx context.Context, request *mcp.CallToolRequest, url 
 		}
 	}
 
-	// Log completion
-	if request != nil && request.Session != nil {
-		request.Session.Log(ctx, &mcp.LoggingMessageParams{
-			Level: "info",
-			Data:  "Schema fetch and cache completed successfully",
-		})
-	}
 	log.Info().Msg("Schema fetch and cache completed successfully")
 
 	return bytes.NewReader(data), nil
-}
-
-// fetchAndCacheSchemaBackground fetches a schema without MCP logging (for background operations)
-func fetchAndCacheSchemaBackground(url string) (io.Reader, error) {
-	return fetchAndCacheSchema(context.Background(), nil, url)
 }
 
 // formatErrorMessage formats jsonschema validation errors into user-friendly messages
@@ -396,7 +353,7 @@ func loadOrFetchSchema(url string) (io.Reader, error) {
 		// Check if cache has expired
 		if isCacheExpired(url) {
 			// Cache expired: fetch fresh copy
-			return fetchAndCacheSchemaBackground(url)
+			return fetchAndCacheSchema(url)
 		}
 
 		data, err := io.ReadAll(file)
@@ -407,12 +364,12 @@ func loadOrFetchSchema(url string) (io.Reader, error) {
 		var v interface{}
 		if err := json.Unmarshal(data, &v); err != nil {
 			// Invalid cache: proceed to fetch
-			return fetchAndCacheSchemaBackground(url)
+			return fetchAndCacheSchema(url)
 		}
 		return bytes.NewReader(data), nil
 	}
 	// Cache miss: fetch from URL
-	return fetchAndCacheSchemaBackground(url)
+	return fetchAndCacheSchema(url)
 }
 
 // resolveSchemaError attempts to validate against specific request schemas for better error messages
@@ -520,7 +477,7 @@ type PropertySubDescription struct {
 }
 
 // GetNotecardAPIs returns API documentation for a specific API or lists available APIs
-func GetNotecardAPIs(ctx context.Context, request *mcp.CallToolRequest, apiName string) (*APICategory, error) {
+func GetNotecardAPIs(apiName string) (*APICategory, error) {
 	// Ensure schema is initialized
 	if err := initSchema(defaultSchemaURL); err != nil {
 		return nil, fmt.Errorf("failed to initialize schema: %v", err)
@@ -534,13 +491,6 @@ func GetNotecardAPIs(ctx context.Context, request *mcp.CallToolRequest, apiName 
 
 	// If no cache files found, force schema initialization to populate cache
 	if len(cacheFiles) == 0 {
-		// Log to client that we're fetching fresh schema
-		if request != nil && request.Session != nil {
-			request.Session.Log(ctx, &mcp.LoggingMessageParams{
-				Level: "info",
-				Data:  "No cached API schema found, fetching fresh schema from remote...",
-			})
-		}
 		log.Debug().Msg("No cached API schema found, fetching fresh schema from remote...")
 
 		// Force a fresh fetch by safely resetting the schema cache
@@ -570,13 +520,6 @@ func GetNotecardAPIs(ctx context.Context, request *mcp.CallToolRequest, apiName 
 
 		// Check if the specific API schema file exists
 		if _, err := os.Stat(schemaFile); os.IsNotExist(err) {
-			// Log to client that we're refreshing schema
-			if request != nil && request.Session != nil {
-				request.Session.Log(ctx, &mcp.LoggingMessageParams{
-					Level: "info",
-					Data:  fmt.Sprintf("API '%s' not found in cache, refreshing schema...", apiName),
-				})
-			}
 			log.Debug().Str("api", apiName).Msg("API not found in cache, refreshing schema...")
 
 			// Try to refresh the cache in case the API was recently added
