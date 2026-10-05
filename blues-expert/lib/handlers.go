@@ -159,7 +159,7 @@ func HandleAPIDocsTool(ctx context.Context, request *mcp.CallToolRequest, args G
 	TrackSession(request, "api_docs")
 
 	// Get API documentation
-	apiCategory, err := GetNotecardAPIs(ctx, request, args.API)
+	apiCategory, err := GetNotecardAPIs(args.API)
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -207,7 +207,7 @@ func HandleDocsSearchTool(ctx context.Context, request *mcp.CallToolRequest, arg
 	TrackSession(request, "docs_search")
 
 	// Call the search implementation from query.go
-	result, err := SearchNotecardDocs(ctx, request, args.Query)
+	result, err := SearchNotecardDocs(ctx, args.Query)
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{

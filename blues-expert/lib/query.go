@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -76,7 +77,7 @@ type SearchResult struct {
 }
 
 // SearchNotecardDocs performs a search against the Blues documentation API
-func SearchNotecardDocs(ctx context.Context, request *mcp.CallToolRequest, query string) (*mcp.CallToolResult, error) {
+func SearchNotecardDocs(ctx context.Context, query string) (*mcp.CallToolResult, error) {
 
 	// Create HTTP client with timeout
 	client := &http.Client{
@@ -117,13 +118,7 @@ func SearchNotecardDocs(ctx context.Context, request *mcp.CallToolRequest, query
 	if os.Getenv("BLUES_DOCS_API_KEY") != "" {
 		req.Header.Set("x-api-key", os.Getenv("BLUES_DOCS_API_KEY"))
 	} else {
-		// Log that we're requesting permission to access the Blues documentation API
-		if request != nil && request.Session != nil {
-			request.Session.Log(ctx, &mcp.LoggingMessageParams{
-				Level: "info",
-				Data:  "Requesting access to the blues.dev documentation...",
-			})
-		}
+		log.Debug().Msg("Requesting access to the blues.dev documentation...")
 
 		apiKey, err := getAPIKeyFromAWS(ctx)
 		if err != nil {
@@ -137,24 +132,12 @@ func SearchNotecardDocs(ctx context.Context, request *mcp.CallToolRequest, query
 		req.Header.Set("x-api-key", apiKey)
 	}
 
-	// Log that we're making the search request
-	if request != nil && request.Session != nil {
-		request.Session.Log(ctx, &mcp.LoggingMessageParams{
-			Level: "info",
-			Data:  fmt.Sprintf("Searching the blues.dev documentation for: %s", query),
-		})
-	}
+	log.Debug().Str("query", query).Msg("Searching the blues.dev documentation")
 
 	// Make the request
 	resp, err := client.Do(req)
 	if err != nil {
-		// Log the error for server-side debugging
-		if request != nil && request.Session != nil {
-			request.Session.Log(ctx, &mcp.LoggingMessageParams{
-				Level: "error",
-				Data:  fmt.Sprintf("Ragpi request failed: %v", err),
-			})
-		}
+		log.Error().Err(err).Msg("Ragpi request failed")
 
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -174,13 +157,7 @@ func SearchNotecardDocs(ctx context.Context, request *mcp.CallToolRequest, query
 			errorMsg += fmt.Sprintf(": %s", string(body))
 		}
 
-		// Log the error for server-side debugging
-		if request != nil && request.Session != nil {
-			request.Session.Log(ctx, &mcp.LoggingMessageParams{
-				Level: "error",
-				Data:  fmt.Sprintf("Ragpi API error: %s", errorMsg),
-			})
-		}
+		log.Error().Str("error", errorMsg).Msg("Ragpi API error")
 
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
