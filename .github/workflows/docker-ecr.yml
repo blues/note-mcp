@@ -25,6 +25,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
 
     steps:
       - name: Checkout repository
@@ -68,3 +70,88 @@ jobs:
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
           platforms: linux/amd64,linux/arm64
+
+  # Open a PR on blues.dev that bumps the version in its MCP server manifest to
+  # the version just pushed. Prereleases only do a dry run, which still checks
+  # the credentials: the BLUES_DEV_APP_CLIENT_ID variable and
+  # BLUES_DEV_APP_PRIVATE_KEY secret of a GitHub App installed on blues.dev with
+  # contents and pull-requests write access.
+  bump-blues-dev:
+    needs: ecr
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+
+    steps:
+      - name: Generate app token for blues.dev
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.BLUES_DEV_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BLUES_DEV_APP_PRIVATE_KEY }}
+          owner: blues
+          repositories: blues.dev
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Open the version bump PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: blues/blues.dev
+          MANIFEST: public/.well-known/mcp.json
+          VERSION: ${{ needs.ecr.outputs.version }}
+          TAG: ${{ github.event.release.tag_name }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+          DRY_RUN: ${{ github.event.release.prerelease }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Release version '$VERSION' is not semver."
+            exit 1
+          fi
+
+          file="$(gh api "repos/$REPO/contents/$MANIFEST?ref=main")"
+          current="$(jq -r .content <<<"$file" | base64 -d)"
+          previous="$(jq -r .version <<<"$current")"
+          if [ "$previous" = "$VERSION" ]; then
+            echo "$MANIFEST is already at $VERSION; nothing to do."
+            exit 0
+          fi
+
+          # Edit only the version line so the PR diff is exactly one line.
+          updated="$(sed -E "s/^(  \"version\": )\"[^\"]*\"/\1\"$VERSION\"/" <<<"$current")"
+          if [ "$(jq -r .version <<<"$updated")" != "$VERSION" ] ||
+            [ "$(jq -S 'del(.version)' <<<"$current")" != "$(jq -S 'del(.version)' <<<"$updated")" ]; then
+            echo "::error::Could not update the version in $MANIFEST cleanly."
+            exit 1
+          fi
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Prerelease dry run: would bump $MANIFEST from $previous to $VERSION."
+            exit 0
+          fi
+
+          # Reset the branch to main on re-runs so the PR always holds one commit.
+          branch="bump-blues-expert-mcp-$VERSION"
+          main_sha="$(gh api "repos/$REPO/git/ref/heads/main" --jq .object.sha)"
+          if gh api "repos/$REPO/git/ref/heads/$branch" --silent 2>/dev/null; then
+            gh api -X PATCH "repos/$REPO/git/refs/heads/$branch" -f sha="$main_sha" -F force=true --silent
+          else
+            gh api -X POST "repos/$REPO/git/refs" -f ref="refs/heads/$branch" -f sha="$main_sha" --silent
+          fi
+          gh api -X PUT "repos/$REPO/contents/$MANIFEST" \
+            -f branch="$branch" \
+            -f sha="$(jq -r .sha <<<"$file")" \
+            -f message="chore: bump Blues Expert MCP manifest to $VERSION" \
+            -f content="$(printf '%s\n' "$updated" | base64 | tr -d '\n')" \
+            --silent
+
+          if [ -n "$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[].number')" ]; then
+            echo "PR for $branch is already open; branch updated."
+            exit 0
+          fi
+          body="Bumps \`version\` in \`$MANIFEST\` from \`$previous\` to \`$VERSION\` to match the [note-mcp $TAG]($RELEASE_URL) release."
+          body="$body"$'\n\n'"Opened automatically by note-mcp's release workflow."
+          gh pr create --repo "$REPO" --base main --head "$branch" \
+            --title "chore: bump Blues Expert MCP manifest to $VERSION" \
+            --body "$body"
