@@ -19,9 +19,8 @@ import (
 const mcpEndpointPath = "/expert/mcp"
 
 var (
-	envFilePath    string
-	logLevel       string
-	sessionManager *lib.SessionManager
+	envFilePath string
+	logLevel    string
 )
 
 func init() {
@@ -114,8 +113,9 @@ func main() {
 		}
 	}
 
-	// Initialize session manager
-	sessionManager = lib.NewSessionManager()
+	// Initialize the session manager used by lib.TrackSession (this also starts
+	// its cleanup loop). Tool handlers panic if it isn't initialized.
+	lib.NewSessionManager()
 
 	// Create a new MCP server
 	impl := &mcp.Implementation{Name: "Blues Expert MCP", Version: serverVersion()}
