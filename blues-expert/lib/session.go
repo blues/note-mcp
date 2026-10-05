@@ -232,8 +232,11 @@ func LogSessionActivityWithArgs(sessionID, toolName string, sessionData *Session
 			Str("arguments", argsStr).
 			Msg("Tool called (stateless session)")
 	} else {
+		sm := GetSessionManager()
+		sm.mu.RLock()
 		historyCount := len(sessionData.RequestLog)
 		totalRequests := sessionData.RequestCount
+		sm.mu.RUnlock()
 
 		// Show if we've truncated history
 		if totalRequests > int64(historyCount) && historyCount == 50 {
